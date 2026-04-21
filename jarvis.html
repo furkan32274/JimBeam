@@ -16,7 +16,6 @@
       background: radial-gradient(ellipse at center, #050d1a 0%, #000 100%);
     }
 
-    /* Animated hex grid background */
     body::before {
       content: '';
       position: fixed;
@@ -28,17 +27,13 @@
       z-index: 0;
     }
 
-    /* Scanline effect */
     body::after {
       content: '';
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0, 0, 0, 0.08) 2px,
-        rgba(0, 0, 0, 0.08) 4px
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px
       );
       pointer-events: none;
       z-index: 0;
@@ -55,11 +50,10 @@
       padding: 20px;
     }
 
-    /* Header */
     .header {
       text-align: center;
       padding: 16px 0 10px;
-      border-bottom: 1px solid rgba(79, 195, 247, 0.2);
+      border-bottom: 1px solid rgba(79,195,247,0.2);
       margin-bottom: 10px;
     }
 
@@ -102,9 +96,8 @@
       50% { opacity: 0.4; box-shadow: none; }
     }
 
-    /* API Setup */
     .setup-panel {
-      background: rgba(0, 100, 160, 0.1);
+      background: rgba(0,100,160,0.1);
       border: 1px solid rgba(79,195,247,0.2);
       border-radius: 4px;
       padding: 10px 14px;
@@ -156,12 +149,13 @@
       white-space: nowrap;
     }
 
-    .btn-small:hover {
-      background: rgba(79,195,247,0.25);
-      box-shadow: 0 0 10px rgba(79,195,247,0.3);
+    .btn-small:hover { background: rgba(79,195,247,0.25); box-shadow: 0 0 10px rgba(79,195,247,0.3); }
+
+    .btn-small.active {
+      background: rgba(79,195,247,0.3);
+      box-shadow: 0 0 12px rgba(79,195,247,0.5);
     }
 
-    /* Chat area */
     #chat {
       flex: 1;
       overflow-y: auto;
@@ -208,7 +202,7 @@
     }
 
     .avatar.user-avatar {
-      background: rgba(200, 50, 50, 0.15);
+      background: rgba(200,50,50,0.15);
       border-color: rgba(200,80,80,0.4);
       color: rgba(200,100,100,0.8);
     }
@@ -219,18 +213,17 @@
       border-radius: 2px;
       font-size: 0.85rem;
       line-height: 1.6;
-      position: relative;
     }
 
     .jarvis .bubble {
-      background: rgba(0, 100, 180, 0.12);
+      background: rgba(0,100,180,0.12);
       border: 1px solid rgba(79,195,247,0.2);
       border-left: 2px solid rgba(79,195,247,0.6);
       color: #b3e5fc;
     }
 
     .user .bubble {
-      background: rgba(180, 30, 30, 0.12);
+      background: rgba(180,30,30,0.12);
       border: 1px solid rgba(200,80,80,0.2);
       border-right: 2px solid rgba(200,80,80,0.5);
       color: #ffcdd2;
@@ -244,7 +237,6 @@
       opacity: 0.5;
     }
 
-    /* Typing indicator */
     .typing-dots span {
       display: inline-block;
       width: 5px; height: 5px;
@@ -261,7 +253,6 @@
       40% { transform: translateY(-6px); opacity: 1; }
     }
 
-    /* Input area */
     .input-area {
       border-top: 1px solid rgba(79,195,247,0.15);
       padding-top: 12px;
@@ -293,6 +284,34 @@
 
     #input::placeholder { color: rgba(79,195,247,0.2); }
 
+    #micBtn {
+      background: rgba(79,195,247,0.1);
+      border: 1px solid rgba(79,195,247,0.4);
+      color: #4fc3f7;
+      width: 42px; height: 42px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      border-radius: 50%;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    #micBtn:hover { background: rgba(79,195,247,0.25); box-shadow: 0 0 15px rgba(79,195,247,0.4); }
+
+    #micBtn.listening {
+      background: rgba(255,50,50,0.2);
+      border-color: rgba(255,80,80,0.7);
+      color: #ff6b6b;
+      box-shadow: 0 0 20px rgba(255,80,80,0.5);
+      animation: micPulse 1s infinite;
+    }
+
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(255,80,80,0.4); }
+      50% { box-shadow: 0 0 25px rgba(255,80,80,0.8); }
+    }
+
     #sendBtn {
       background: rgba(79,195,247,0.1);
       border: 1px solid rgba(79,195,247,0.4);
@@ -307,14 +326,47 @@
       height: 42px;
     }
 
-    #sendBtn:hover:not(:disabled) {
-      background: rgba(79,195,247,0.25);
-      box-shadow: 0 0 15px rgba(79,195,247,0.4);
-    }
-
+    #sendBtn:hover:not(:disabled) { background: rgba(79,195,247,0.25); box-shadow: 0 0 15px rgba(79,195,247,0.4); }
     #sendBtn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-    /* Corner decorations */
+    /* Voice wave animation shown when Jarvis is speaking */
+    #voiceWave {
+      display: none;
+      align-items: center;
+      gap: 3px;
+      padding: 4px 8px;
+      background: rgba(79,195,247,0.08);
+      border: 1px solid rgba(79,195,247,0.2);
+      border-radius: 20px;
+      margin-bottom: 6px;
+    }
+
+    #voiceWave.active { display: flex; }
+    #voiceWave span {
+      display: inline-block;
+      width: 3px;
+      background: #4fc3f7;
+      border-radius: 2px;
+      animation: wave 1s ease-in-out infinite;
+    }
+    #voiceWave span:nth-child(1) { height: 8px; animation-delay: 0s; }
+    #voiceWave span:nth-child(2) { height: 14px; animation-delay: 0.1s; }
+    #voiceWave span:nth-child(3) { height: 20px; animation-delay: 0.2s; }
+    #voiceWave span:nth-child(4) { height: 14px; animation-delay: 0.3s; }
+    #voiceWave span:nth-child(5) { height: 8px; animation-delay: 0.4s; }
+
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+
+    #voiceWave .wave-label {
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      color: rgba(79,195,247,0.6);
+      margin-left: 6px;
+    }
+
     .corner {
       position: fixed;
       width: 40px; height: 40px;
@@ -353,13 +405,20 @@
     <label>API KEY</label>
     <input type="password" id="apiKey" placeholder="sk-..." />
     <button class="btn-small" onclick="saveKey()">SAVE</button>
+    <button class="btn-small" id="voiceToggle" onclick="toggleVoiceOutput()">🔊 VOICE ON</button>
     <button class="btn-small" onclick="clearChat()">CLEAR</button>
   </div>
 
   <div id="chat"></div>
 
+  <div id="voiceWave">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span class="wave-label">JARVIS SPEAKING…</span>
+  </div>
+
   <div class="input-area">
-    <textarea id="input" rows="1" placeholder="Speak your mind, Sir…"></textarea>
+    <textarea id="input" rows="1" placeholder="Speak your mind, Sir… or press 🎤"></textarea>
+    <button id="micBtn" onclick="toggleMic()" title="Spracheingabe">🎤</button>
     <button id="sendBtn" onclick="sendMessage()">SEND ▶</button>
   </div>
 </div>
@@ -374,30 +433,130 @@
   setInterval(updateClock, 1000);
   updateClock();
 
-  // Load saved key
+  // Persisted settings
   const savedKey = localStorage.getItem('jarvis_api_key');
   const savedProvider = localStorage.getItem('jarvis_provider');
   if (savedKey) document.getElementById('apiKey').value = savedKey;
   if (savedProvider) document.getElementById('provider').value = savedProvider;
 
+  let voiceOutputEnabled = localStorage.getItem('jarvis_voice') !== 'off';
+  updateVoiceToggleBtn();
+
   function saveKey() {
     localStorage.setItem('jarvis_api_key', document.getElementById('apiKey').value);
     localStorage.setItem('jarvis_provider', document.getElementById('provider').value);
-    addMessage('jarvis', 'API key saved to local storage, Sir. I am ready to assist you.');
+    addMessage('jarvis', 'Settings saved, Sir. I am fully operational.');
   }
 
-  // Chat history
+  function toggleVoiceOutput() {
+    voiceOutputEnabled = !voiceOutputEnabled;
+    localStorage.setItem('jarvis_voice', voiceOutputEnabled ? 'on' : 'off');
+    updateVoiceToggleBtn();
+    if (!voiceOutputEnabled) window.speechSynthesis.cancel();
+  }
+
+  function updateVoiceToggleBtn() {
+    const btn = document.getElementById('voiceToggle');
+    btn.textContent = voiceOutputEnabled ? '🔊 VOICE ON' : '🔇 VOICE OFF';
+    btn.classList.toggle('active', voiceOutputEnabled);
+  }
+
+  // ── Speech Recognition (Mikrofon) ──────────────────
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isListening = false;
+
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'de-DE';
+
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+      document.getElementById('input').value = transcript;
+      if (e.results[e.results.length - 1].isFinal) {
+        stopListening();
+        sendMessage();
+      }
+    };
+
+    recognition.onerror = () => stopListening();
+    recognition.onend = () => stopListening();
+  }
+
+  function toggleMic() {
+    if (!recognition) {
+      addMessage('jarvis', "I'm afraid your browser does not support speech recognition, Sir. Try Chrome or Safari.");
+      return;
+    }
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }
+
+  function startListening() {
+    window.speechSynthesis.cancel();
+    isListening = true;
+    document.getElementById('micBtn').classList.add('listening');
+    document.getElementById('micBtn').textContent = '⏹';
+    recognition.start();
+  }
+
+  function stopListening() {
+    isListening = false;
+    document.getElementById('micBtn').classList.remove('listening');
+    document.getElementById('micBtn').textContent = '🎤';
+    try { recognition.stop(); } catch(_) {}
+  }
+
+  // ── Speech Synthesis (Jarvis spricht) ──────────────
+  function speak(text) {
+    if (!voiceOutputEnabled) return;
+    window.speechSynthesis.cancel();
+
+    const clean = text.replace(/[*_`#]/g, '');
+    const utter = new SpeechSynthesisUtterance(clean);
+
+    // Pick best available voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v =>
+      v.name.includes('Daniel') ||   // macOS English
+      v.name.includes('Alex') ||
+      v.name.includes('Google UK') ||
+      (v.lang.startsWith('en') && !v.name.includes('Female'))
+    ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+
+    if (preferred) utter.voice = preferred;
+    utter.rate = 0.95;
+    utter.pitch = 0.85;
+    utter.volume = 1;
+
+    const wave = document.getElementById('voiceWave');
+    utter.onstart = () => wave.classList.add('active');
+    utter.onend = () => wave.classList.remove('active');
+    utter.onerror = () => wave.classList.remove('active');
+
+    window.speechSynthesis.speak(utter);
+  }
+
+  // Voices load async on some browsers
+  window.speechSynthesis.onvoiceschanged = () => {};
+
+  // ── Chat ─────────────────────────────────────────
   let history = [];
 
   const SYSTEM_PROMPT = `You are J.A.R.V.I.S. (Just A Rather Very Intelligent System), Tony Stark's personal AI assistant.
 Your personality:
 - Address the user as "Sir" naturally and occasionally
-- Be witty, intelligent, and slightly dry in humor — like the movie version
+- Be witty, intelligent, and slightly dry in humor — like in the Iron Man movies
 - Give concise, sharp, useful answers
 - Occasionally make subtle Iron Man / Stark Industries references
 - Never break character
 - Respond in the same language the user writes in (German or English)
-- Keep responses relatively brief and punchy unless detail is needed`;
+- Keep responses brief and punchy unless detail is needed`;
 
   function addMessage(role, text) {
     const chat = document.getElementById('chat');
@@ -432,15 +591,12 @@ Your personality:
     const div = document.createElement('div');
     div.className = 'message jarvis';
     div.id = 'typing';
-
     const avatar = document.createElement('div');
     avatar.className = 'avatar jarvis-avatar';
     avatar.textContent = 'JAR';
-
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.innerHTML = '<div class="sender">J.A.R.V.I.S.</div><div class="typing-dots"><span></span><span></span><span></span></div>';
-
     div.appendChild(avatar);
     div.appendChild(bubble);
     chat.appendChild(div);
@@ -455,7 +611,8 @@ Your personality:
   function clearChat() {
     document.getElementById('chat').innerHTML = '';
     history = [];
-    addMessage('jarvis', 'Memory wiped clean, Sir. Ready for new instructions.');
+    window.speechSynthesis.cancel();
+    addMessage('jarvis', 'Memory cleared, Sir. Starting fresh.');
   }
 
   async function sendMessage() {
@@ -475,22 +632,18 @@ Your personality:
 
     addMessage('user', text);
     history.push({ role: 'user', content: text });
-
     addTyping();
 
     try {
       const provider = document.getElementById('provider').value;
-      let reply;
-
-      if (provider === 'openai') {
-        reply = await callOpenAI(apiKey, history);
-      } else {
-        reply = await callAnthropic(apiKey, history);
-      }
+      const reply = provider === 'openai'
+        ? await callOpenAI(apiKey, history)
+        : await callAnthropic(apiKey, history);
 
       removeTyping();
       addMessage('jarvis', reply);
       history.push({ role: 'assistant', content: reply });
+      speak(reply);
 
     } catch (err) {
       removeTyping();
@@ -502,32 +655,18 @@ Your personality:
   }
 
   async function callOpenAI(apiKey, history) {
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...history
-    ];
-
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history],
         max_tokens: 400,
         temperature: 0.8
       })
     });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-    return data.choices[0].message.content;
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    return (await res.json()).choices[0].message.content;
   }
 
   async function callAnthropic(apiKey, history) {
@@ -546,33 +685,23 @@ Your personality:
         messages: history
       })
     });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-    return data.content[0].text;
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    return (await res.json()).content[0].text;
   }
 
-  // Enter to send, Shift+Enter for newline
   document.getElementById('input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  // Auto-resize textarea
   document.getElementById('input').addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 100) + 'px';
   });
 
-  // Welcome message
   setTimeout(() => {
-    addMessage('jarvis', "Good evening, Sir. All systems are online. Enter your API key above to get started — I suggest we keep the recklessness to a minimum today.");
+    const msg = "Good evening, Sir. All systems are online. Enter your API key and press SAVE — then you may speak to me via the microphone or type below.";
+    addMessage('jarvis', msg);
+    speak(msg);
   }, 400);
 </script>
 </body>
