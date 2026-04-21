@@ -414,6 +414,11 @@
 
   <div id="chat"></div>
 
+  <div id="startCall" style="text-align:center; padding: 14px; margin-bottom: 10px; background: rgba(79,195,247,0.08); border: 1px solid rgba(79,195,247,0.3); border-radius: 4px; cursor: pointer;" onclick="startCallMode()">
+    <div style="font-size: 1rem; letter-spacing: 0.3em; color: #4fc3f7;">▶ TAP TO START VOICE CONVERSATION</div>
+    <div style="font-size: 0.65rem; color: rgba(79,195,247,0.5); margin-top: 4px; letter-spacing: 0.15em;">Tippe hier einmal — dann sprich einfach los</div>
+  </div>
+
   <div id="voiceWave">
     <span></span><span></span><span></span><span></span><span></span>
     <span class="wave-label">JARVIS SPEAKING…</span>
@@ -468,6 +473,7 @@
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let isListening = false;
+  let autoListen = true;  // After Jarvis speaks, auto-start mic again
 
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
@@ -484,7 +490,10 @@
       }
     };
 
-    recognition.onerror = () => stopListening();
+    recognition.onerror = (e) => {
+      console.log('Recognition error:', e.error);
+      stopListening();
+    };
     recognition.onend = () => stopListening();
   }
 
@@ -516,37 +525,61 @@
   }
 
   // ── Speech Synthesis (Jarvis spricht) ──────────────
-  function speak(text) {
-    if (!voiceOutputEnabled) return;
+  let voicesLoaded = false;
+  let cachedVoice = null;
+
+  function loadVoices() {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) return null;
+    voicesLoaded = true;
+
+    // Prefer German voice for German users
+    const preferred =
+      voices.find(v => v.name.includes('Markus')) ||
+      voices.find(v => v.name.includes('Yannick')) ||
+      voices.find(v => v.lang === 'de-DE' && v.name.includes('Anna')) ||
+      voices.find(v => v.lang.startsWith('de') && v.name.includes('Google')) ||
+      voices.find(v => v.lang.startsWith('de')) ||
+      voices.find(v => v.name.includes('Daniel')) ||
+      voices.find(v => v.name.includes('Alex')) ||
+      voices.find(v => v.lang.startsWith('en')) ||
+      voices[0];
+
+    cachedVoice = preferred;
+    return preferred;
+  }
+
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+
+  function speak(text, onDone) {
+    if (!voiceOutputEnabled) { if (onDone) onDone(); return; }
     window.speechSynthesis.cancel();
 
     const clean = text.replace(/[*_`#]/g, '');
     const utter = new SpeechSynthesisUtterance(clean);
 
-    // Pick best available voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v =>
-      v.name.includes('Daniel') ||   // macOS English
-      v.name.includes('Alex') ||
-      v.name.includes('Google UK') ||
-      (v.lang.startsWith('en') && !v.name.includes('Female'))
-    ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
-
-    if (preferred) utter.voice = preferred;
-    utter.rate = 0.95;
-    utter.pitch = 0.85;
+    const voice = cachedVoice || loadVoices();
+    if (voice) utter.voice = voice;
+    utter.lang = voice?.lang || 'de-DE';
+    utter.rate = 1.0;
+    utter.pitch = 0.9;
     utter.volume = 1;
 
     const wave = document.getElementById('voiceWave');
     utter.onstart = () => wave.classList.add('active');
-    utter.onend = () => wave.classList.remove('active');
-    utter.onerror = () => wave.classList.remove('active');
+    utter.onend = () => {
+      wave.classList.remove('active');
+      if (onDone) onDone();
+    };
+    utter.onerror = (e) => {
+      console.log('Speech error:', e);
+      wave.classList.remove('active');
+      if (onDone) onDone();
+    };
 
     window.speechSynthesis.speak(utter);
   }
-
-  // Voices load async on some browsers
-  window.speechSynthesis.onvoiceschanged = () => {};
 
   // ── Chat ─────────────────────────────────────────
   let history = [];
@@ -655,11 +688,20 @@ Your personality:
       removeTyping();
       addMessage('jarvis', reply);
       history.push({ role: 'assistant', content: reply });
-      speak(reply);
+      speak(reply, () => {
+        // Auto-listen: restart mic after Jarvis finishes speaking
+        if (autoListen && recognition && !isListening) {
+          setTimeout(() => {
+            if (!isListening) startListening();
+          }, 300);
+        }
+      });
 
     } catch (err) {
       removeTyping();
-      addMessage('jarvis', `I'm afraid something went wrong, Sir. ${err.message}`);
+      const errMsg = `Entschuldigung Sir, es gab ein Problem: ${err.message}`;
+      addMessage('jarvis', errMsg);
+      speak(errMsg);
     }
 
     document.getElementById('sendBtn').disabled = false;
@@ -750,11 +792,20 @@ Your personality:
     this.style.height = Math.min(this.scrollHeight, 100) + 'px';
   });
 
-  setTimeout(() => {
-    const msg = "Good evening, Sir. All systems online. Puter.js is active — you may speak to me via the microphone or type below. No API key required.";
-    addMessage('jarvis', msg);
-    speak(msg);
-  }, 400);
+  function startCallMode() {
+    // Prime the speech synthesis with a user gesture so subsequent speech works
+    const primer = new SpeechSynthesisUtterance(' ');
+    primer.volume = 0;
+    window.speechSynthesis.speak(primer);
+
+    document.getElementById('startCall').style.display = 'none';
+
+    const greeting = "Guten Abend Sir. Alle Systeme sind online. Wie kann ich Ihnen behilflich sein?";
+    addMessage('jarvis', greeting);
+    speak(greeting, () => {
+      if (recognition) startListening();
+    });
+  }
 </script>
 </body>
 </html>
