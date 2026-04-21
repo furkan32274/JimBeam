@@ -399,11 +399,12 @@
   <div class="setup-panel">
     <label>PROVIDER</label>
     <select id="provider">
+      <option value="gemini">Google Gemini (kostenlos)</option>
       <option value="openai">OpenAI (ChatGPT)</option>
       <option value="anthropic">Anthropic (Claude)</option>
     </select>
     <label>API KEY</label>
-    <input type="password" id="apiKey" placeholder="sk-..." />
+    <input type="password" id="apiKey" placeholder="AIza... / sk-..." />
     <button class="btn-small" onclick="saveKey()">SAVE</button>
     <button class="btn-small" id="voiceToggle" onclick="toggleVoiceOutput()">🔊 VOICE ON</button>
     <button class="btn-small" onclick="clearChat()">CLEAR</button>
@@ -435,9 +436,9 @@
 
   // Persisted settings
   const savedKey = localStorage.getItem('jarvis_api_key');
-  const savedProvider = localStorage.getItem('jarvis_provider');
+  const savedProvider = localStorage.getItem('jarvis_provider') || 'gemini';
   if (savedKey) document.getElementById('apiKey').value = savedKey;
-  if (savedProvider) document.getElementById('provider').value = savedProvider;
+  document.getElementById('provider').value = savedProvider;
 
   let voiceOutputEnabled = localStorage.getItem('jarvis_voice') !== 'off';
   updateVoiceToggleBtn();
@@ -636,7 +637,9 @@ Your personality:
 
     try {
       const provider = document.getElementById('provider').value;
-      const reply = provider === 'openai'
+      const reply = provider === 'gemini'
+        ? await callGemini(apiKey, history)
+        : provider === 'openai'
         ? await callOpenAI(apiKey, history)
         : await callAnthropic(apiKey, history);
 
@@ -652,6 +655,27 @@ Your personality:
 
     document.getElementById('sendBtn').disabled = false;
     input.focus();
+  }
+
+  async function callGemini(apiKey, history) {
+    const contents = history.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents,
+          generationConfig: { maxOutputTokens: 400, temperature: 0.8 }
+        })
+      }
+    );
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    return (await res.json()).candidates[0].content.parts[0].text;
   }
 
   async function callOpenAI(apiKey, history) {
@@ -679,7 +703,7 @@ Your personality:
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-opus-4-7',
         max_tokens: 400,
         system: SYSTEM_PROMPT,
         messages: history
