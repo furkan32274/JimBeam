@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>J.A.R.V.I.S.</title>
+  <script src="https://js.puter.com/v2/"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -397,14 +398,15 @@
   </div>
 
   <div class="setup-panel">
-    <label>PROVIDER</label>
+    <label>MODE</label>
     <select id="provider">
-      <option value="gemini">Google Gemini (kostenlos)</option>
-      <option value="openai">OpenAI (ChatGPT)</option>
-      <option value="anthropic">Anthropic (Claude)</option>
+      <option value="puter">Puter.js — Claude (kostenlos, kein Key)</option>
+      <option value="puter-gpt">Puter.js — GPT-4o (kostenlos, kein Key)</option>
+      <option value="gemini">Google Gemini (eigener Key)</option>
+      <option value="openai">OpenAI (eigener Key)</option>
+      <option value="anthropic">Anthropic Claude (eigener Key)</option>
     </select>
-    <label>API KEY</label>
-    <input type="password" id="apiKey" placeholder="AIza... / sk-..." />
+    <input type="password" id="apiKey" placeholder="Kein Key nötig bei Puter" />
     <button class="btn-small" onclick="saveKey()">SAVE</button>
     <button class="btn-small" id="voiceToggle" onclick="toggleVoiceOutput()">🔊 VOICE ON</button>
     <button class="btn-small" onclick="clearChat()">CLEAR</button>
@@ -436,7 +438,7 @@
 
   // Persisted settings
   const savedKey = localStorage.getItem('jarvis_api_key');
-  const savedProvider = localStorage.getItem('jarvis_provider') || 'gemini';
+  const savedProvider = localStorage.getItem('jarvis_provider') || 'puter';
   if (savedKey) document.getElementById('apiKey').value = savedKey;
   document.getElementById('provider').value = savedProvider;
 
@@ -621,8 +623,9 @@ Your personality:
     const text = input.value.trim();
     if (!text) return;
 
+    const provider = document.getElementById('provider').value;
     const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('jarvis_api_key');
-    if (!apiKey) {
+    if (!apiKey && !provider.startsWith('puter')) {
       addMessage('jarvis', 'Sir, I require an API key to function. Please enter one above and click SAVE.');
       return;
     }
@@ -636,12 +639,18 @@ Your personality:
     addTyping();
 
     try {
-      const provider = document.getElementById('provider').value;
-      const reply = provider === 'gemini'
-        ? await callGemini(apiKey, history)
-        : provider === 'openai'
-        ? await callOpenAI(apiKey, history)
-        : await callAnthropic(apiKey, history);
+      let reply;
+      if (provider === 'puter') {
+        reply = await callPuter(history, 'claude-3-5-sonnet');
+      } else if (provider === 'puter-gpt') {
+        reply = await callPuter(history, 'gpt-4o');
+      } else if (provider === 'gemini') {
+        reply = await callGemini(apiKey, history);
+      } else if (provider === 'openai') {
+        reply = await callOpenAI(apiKey, history);
+      } else {
+        reply = await callAnthropic(apiKey, history);
+      }
 
       removeTyping();
       addMessage('jarvis', reply);
@@ -655,6 +664,25 @@ Your personality:
 
     document.getElementById('sendBtn').disabled = false;
     input.focus();
+  }
+
+  async function callPuter(history, model) {
+    if (typeof puter === 'undefined') {
+      throw new Error('Puter.js konnte nicht geladen werden. Bitte Internet-Verbindung prüfen.');
+    }
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...history
+    ];
+    const response = await puter.ai.chat(messages, { model });
+    if (typeof response === 'string') return response;
+    if (response?.message?.content) {
+      const c = response.message.content;
+      if (Array.isArray(c)) return c.map(p => p.text || '').join('');
+      return c;
+    }
+    if (response?.text) return response.text;
+    return String(response);
   }
 
   async function callGemini(apiKey, history) {
@@ -723,7 +751,7 @@ Your personality:
   });
 
   setTimeout(() => {
-    const msg = "Good evening, Sir. All systems are online. Enter your API key and press SAVE — then you may speak to me via the microphone or type below.";
+    const msg = "Good evening, Sir. All systems online. Puter.js is active — you may speak to me via the microphone or type below. No API key required.";
     addMessage('jarvis', msg);
     speak(msg);
   }, 400);
