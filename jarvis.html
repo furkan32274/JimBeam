@@ -263,6 +263,7 @@
   <div id="startScreen" class="start-screen">
     <button class="start-btn" onclick="startCall()">▶ ANRUF STARTEN</button>
     <div class="hint" style="margin-top: 30px;">Einmal klicken — danach einfach sprechen</div>
+    <div id="deviceInfo" class="hint" style="margin-top: 16px; opacity: 0.5;"></div>
   </div>
 
   <div id="callScreen" style="display:none; flex-direction:column; align-items:center;">
@@ -647,6 +648,27 @@ Persönlichkeit:
       startCall();
     }
   });
+
+  // Show device info and warnings on start screen
+  (function deviceCheck() {
+    const info = document.getElementById('deviceInfo');
+    if (!info) return;
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+    const hasMic = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    let msg = '';
+    if (isIOS && !isSecure) {
+      msg = '⚠ iPhone/iPad: Für Mikrofon HTTPS benutzen (server.py --https)';
+    } else if (!hasMic) {
+      msg = '⚠ Dieser Browser unterstützt keine Spracherkennung — nutze Chrome oder Safari';
+    } else if (isIOS) {
+      msg = '✓ iPhone/iPad erkannt — Mikro & Stimme bereit';
+    } else {
+      msg = '✓ Alle Systeme bereit';
+    }
+    info.textContent = msg;
+  })();
 </script>
 </body>
 </html>
