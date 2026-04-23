@@ -244,8 +244,9 @@ class VoiceAssistant:
             _download(f"{base}/{voices_p.name}", voices_p)
         print(f"[TTS] Loading Kokoro ONNX  (voice: {c['voice']}) …")
         self._kokoro = Kokoro(str(model_p), str(voices_p))
-        self._voice: str  = c["voice"]
-        self._speed: float = float(c.get("speed", 1.0))
+        self._voice: str    = c["voice"]
+        self._speed: float  = float(c.get("speed", 1.0))
+        self._tts_lang: str = c.get("language", "en-us")
         print("[TTS] Ready")
 
     def _load_stt(self) -> None:
@@ -349,7 +350,7 @@ class VoiceAssistant:
 
     def _synthesise(self, text: str) -> np.ndarray:
         samples, _ = self._kokoro.create(
-            text, voice=self._voice, speed=self._speed, lang="en-us"
+            text, voice=self._voice, speed=self._speed, lang=self._tts_lang
         )
         return np.asarray(samples, dtype=np.float32)
 
