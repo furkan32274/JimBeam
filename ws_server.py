@@ -43,6 +43,7 @@ _clients: Set[WebSocketServerProtocol] = set()
 _loop: asyncio.AbstractEventLoop | None = None
 _current_state: str = "idle"
 _muted: bool = False
+_chat_callback = None
 _state_lock = threading.Lock()
 _start_lock = threading.Lock()
 _servers_started = False
@@ -124,6 +125,28 @@ def is_muted() -> bool:
         return _muted
 
 
+def set_chat_callback(fn) -> None:
+    """Register a callable that receives text chat input from the browser."""
+    global _chat_callback
+    _chat_callback = fn
+
+
+def broadcast_chat(role: str, text: str) -> None:
+    """Broadcast a chat message to all connected WebSocket clients."""
+    if _loop is None:
+        return
+    asyncio.run_coroutine_threadsafe(
+        _broadcast_raw({"type": "chat", "role": role, "text": text}), _loop
+    )
+
+
+async def _broadcast_raw(event: dict) -> None:
+    if not _clients:
+        return
+    msg = json.dumps(event)
+    await asyncio.gather(*[ws.send(msg) for ws in list(_clients)], return_exceptions=True)
+
+
 def get_status() -> dict[str, str | bool]:
     with _state_lock:
         return {"state": _current_state, "muted": _muted}
@@ -163,6 +186,31 @@ def _handle_api_mute(handler: http.server.BaseHTTPRequestHandler) -> None:
     handler.wfile.write(body)
 
 
+def _handle_api_chat(handler: http.server.BaseHTTPRequestHandler) -> None:
+    length = int(handler.headers.get("Content-Length", "0"))
+    raw = handler.rfile.read(length) if length > 0 else b"{}"
+    try:
+        data = json.loads(raw.decode("utf-8"))
+        text = str(data.get("text", "")).strip()
+    except (json.JSONDecodeError, KeyError, TypeError):
+        handler.send_error(400, "Invalid chat payload")
+        return
+
+    if not text:
+        handler.send_error(400, "Empty text")
+        return
+
+    if _chat_callback:
+        _chat_callback(text)
+
+    body = b'{"ok": true}'
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    _cors_end_headers(handler)
+    handler.wfile.write(body)
+
+
 class _APIOnlyHandler(http.server.BaseHTTPRequestHandler):
     """Minimal HTTP handler if frontend/dist is missing — still binds :3000 for the macOS app."""
 
@@ -194,6 +242,9 @@ class _APIOnlyHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?", 1)[0] == "/api/mute":
             _handle_api_mute(self)
+            return
+        if self.path.split("?", 1)[0] == "/api/chat":
+            _handle_api_chat(self)
             return
         self.send_error(404)
 
@@ -232,6 +283,9 @@ def _serve_http() -> None:
         def do_POST(self):
             if self.path.split("?", 1)[0] == "/api/mute":
                 _handle_api_mute(self)
+                return
+            if self.path.split("?", 1)[0] == "/api/chat":
+                _handle_api_chat(self)
                 return
             self.send_error(404)
 

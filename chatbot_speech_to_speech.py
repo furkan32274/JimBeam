@@ -176,6 +176,11 @@ class VoiceAssistant:
         )
         self._stop_speak = threading.Event()
         skill_manager.load_all()
+        self._text_queue: queue.Queue = queue.Queue()
+        self._turn_lock = threading.Lock()
+        ws_server.set_chat_callback(self._text_queue.put)
+        # Start chat processing thread
+        threading.Thread(target=self._chat_loop, daemon=True, name="chat-input").start()
 
     # ── Loading ───────────────────────────────────────────────────────────────
 
@@ -896,6 +901,31 @@ class VoiceAssistant:
         llm_t.join()
         ws_server.set_state("idle")
 
+    def _chat_loop(self) -> None:
+        """Process text messages sent from the browser chat panel."""
+        while True:
+            text = self._text_queue.get()
+            if not text:
+                continue
+            print(f"[Chat] {text}")
+            ws_server.broadcast_chat("user", text)
+            with self._turn_lock:
+                skill_result = skill_manager.try_execute(text)
+                if skill_result:
+                    ws_server.broadcast_chat("assistant", skill_result)
+                    self.speak_direct(skill_result)
+                else:
+                    sys_response = self._handle_system_command(text)
+                    if sys_response:
+                        ws_server.broadcast_chat("assistant", sys_response)
+                        self.speak_direct(sys_response)
+                    else:
+                        self.handle_turn(text)
+                        if self.history:
+                            last = self.history[-1].get("content", "")
+                            if last:
+                                ws_server.broadcast_chat("assistant", last)
+
     # ── Main loop ─────────────────────────────────────────────────────────────
 
     def run(self) -> None:
@@ -937,7 +967,13 @@ class VoiceAssistant:
                 print(f"System: {sys_response}")
                 self.speak_direct(sys_response)
             else:
-                self.handle_turn(augmented_input)
+                ws_server.broadcast_chat("user", user_input)
+                with self._turn_lock:
+                    self.handle_turn(augmented_input)
+                if self.history:
+                    last = self.history[-1].get("content", "")
+                    if last:
+                        ws_server.broadcast_chat("assistant", last)
                 # Copy LLM response back to clipboard when requested
                 if is_clipboard and self.history:
                     last = self.history[-1].get("content", "")
