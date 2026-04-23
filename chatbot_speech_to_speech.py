@@ -505,7 +505,7 @@ class VoiceAssistant:
 
     def _timer_callback(self, seconds: int, label: str) -> None:
         time.sleep(seconds)
-        msg = f"Sir, your {label} timer is up."
+        msg = f"Dein Timer für {label} ist abgelaufen."
         print(f"\n⏰  {msg}", flush=True)
         subprocess.run(
             ["osascript", "-e",
@@ -549,47 +549,49 @@ class VoiceAssistant:
         """
         t = text.lower().strip()
 
-        # ── Self-learning: "Jarvis, lern wie du X kannst" ────────────────────
-        if re.search(r"\b(?:lern|learn|kannst du lernen|lerne|bitte lern)\b", t):
-            print(f"[SKILL] Learning request detected: {text}")
-            self.speak_direct("Verstanden, Sir. Ich generiere die neue Fähigkeit. Einen Moment bitte.")
-            try:
-                code = self._generate_skill_code(text)
-                # Derive a short name from the request
-                name_match = re.search(r"\b(?:lern|learn)\w*\s+(?:wie\s+(?:du|ich)\s+)?(.+?)(?:\s+kann(?:st)?|$)", t)
-                skill_name = name_match.group(1).strip() if name_match else text[:30]
-                success = skill_manager.save_and_load(skill_name, code)
-                if success:
-                    return f"Erledigt, Sir. Ich beherrsche jetzt '{skill_name}'. Probieren Sie es aus."
-                else:
-                    return "Ich konnte diese Fähigkeit leider nicht erlernen, Sir. Bitte beschreiben Sie es genauer."
-            except Exception as e:
-                print(f"[SKILL] Learning failed: {e}")
-                return "Beim Erlernen gab es einen Fehler, Sir."
-
         # ── Skills: check all learned skills first ────────────────────────────
         skill_resp = skill_manager.try_execute(text)
         if skill_resp is not None:
             return skill_resp
+
+        # ── Self-learning: VERY specific phrasing only ────────────────────────
+        # Must be explicit: "lern wie du X kannst", "bring dir bei", "erstelle skill"
+        if re.search(
+            r"\b(?:lern\s+(?:doch\s+)?wie\s+du|bring\s+dir\s+bei|erstelle\s+(?:einen\s+)?(?:neuen\s+)?skill|neue\s+fähigkeit\s+(?:erstellen|lernen))\b",
+            t,
+        ):
+            print(f"[SKILL] Learning request detected: {text}")
+            self.speak_direct("Verstanden. Ich generiere die neue Fähigkeit. Einen Moment bitte.")
+            try:
+                code = self._generate_skill_code(text)
+                name_match = re.search(r"\b(?:lern|learn)\w*\s+(?:wie\s+(?:du|ich)\s+)?(.+?)(?:\s+kann(?:st)?|$)", t)
+                skill_name = name_match.group(1).strip() if name_match else text[:30]
+                success = skill_manager.save_and_load(skill_name, code)
+                if success:
+                    return f"Erledigt. Ich beherrsche jetzt '{skill_name}'. Probier's aus."
+                return "Ich konnte diese Fähigkeit nicht erlernen. Beschreib es bitte genauer."
+            except Exception as e:
+                print(f"[SKILL] Learning failed: {e}")
+                return "Beim Erlernen gab es ein Problem. Versuch es nochmal."
 
         # ── List skills ───────────────────────────────────────────────────────
         if re.search(r"\b(?:welche fähigkeiten|was kannst du|what can you|liste skills|list skills|deine fähigkeiten)\b", t):
             skills = skill_manager.list_skills()
             if skills:
                 return f"Ich beherrsche folgende Fähigkeiten, Sir: {', '.join(skills)}."
-            return "Ich habe noch keine erlernten Fähigkeiten, Sir. Sagen Sie 'Jarvis, lern wie du...' um mir etwas beizubringen."
+            return "Ich habe noch keine erlernten Fähigkeiten. Sag 'Jarvis, lern wie du ... kannst' um mir etwas beizubringen."
 
         # ── Date & time ───────────────────────────────────────────────────────
-        if re.search(r"\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:current\s+)?time|what\s+time\s+is\s+it)\b", t):
-            now = time.strftime("%-I:%M %p")
-            return f"It's {now}, Sir."
+        if re.search(r"\b(?:wie\s+(?:spät|viel\s+uhr)|uhrzeit|was\s+für\s+eine\s+zeit|time|what\s+time\s+is\s+it)\b", t):
+            now = time.strftime("%H:%M")
+            return f"Es ist {now} Uhr."
 
-        if re.search(r"\b(?:what(?:'s|\s+is)\s+(?:today'?s?\s+)?date|what(?:'s|\s+is)\s+today|today'?s?\s+date)\b", t):
-            today = time.strftime("%A, %B %-d")
-            return f"Today is {today}, Sir."
+        if re.search(r"\b(?:welches\s+datum|welcher\s+tag|was\s+für\s+ein\s+tag|today'?s?\s+date)\b", t):
+            today = time.strftime("%A, %-d. %B")
+            return f"Heute ist {today}."
 
         # ── System info ───────────────────────────────────────────────────────
-        if re.search(r"\b(?:how\s+much\s+(?:ram|memory)|(?:free|available)\s+(?:ram|memory)|memory\s+(?:usage|left|free))\b", t):
+        if re.search(r"\b(?:wie\s+viel\s+(?:ram|arbeitsspeicher|speicher)|freier\s+speicher|memory\s+(?:usage|left|free))\b", t):
             try:
                 vm      = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
                 ps_m    = re.search(r"page size of (\d+) bytes", vm)
@@ -597,11 +599,11 @@ class VoiceAssistant:
                 free    = int(re.search(r"Pages free:\s+(\d+)", vm).group(1))
                 inact   = int(re.search(r"Pages inactive:\s+(\d+)", vm).group(1))
                 avail   = round((free + inact) * page_sz / 1024 ** 3, 1)
-                return f"About {avail} gigabytes of memory available, Sir."
+                return f"Ungefähr {avail} Gigabyte Arbeitsspeicher verfügbar."
             except Exception:
-                return "I couldn't read the memory stats right now, Sir."
+                return "Ich konnte den Speicherstatus gerade nicht auslesen."
 
-        if re.search(r"\b(?:cpu\s+usage|processor\s+(?:usage|load)|how\s+(?:busy|loaded)\s+(?:is\s+)?(?:the\s+)?cpu)\b", t):
+        if re.search(r"\b(?:cpu|prozessor(?:\s+auslastung)?)\b", t):
             try:
                 top = subprocess.run(
                     ["top", "-l", "1", "-n", "0", "-s", "0"],
@@ -610,148 +612,145 @@ class VoiceAssistant:
                 m2 = re.search(r"CPU usage:\s+([\d.]+)%\s+user,\s+([\d.]+)%\s+sys", top)
                 if m2:
                     used = round(float(m2.group(1)) + float(m2.group(2)), 1)
-                    return f"CPU is at {used} percent usage right now, Sir."
+                    return f"Die CPU liegt gerade bei {used} Prozent."
             except Exception:
                 pass
-            return "I couldn't read the CPU stats right now, Sir."
+            return "Ich konnte die CPU-Auslastung nicht lesen."
 
-        if re.search(r"\b(?:how\s+much\s+(?:storage|disk|space)|(?:storage|disk)\s+(?:space\s+)?(?:left|free|remaining|available)|free\s+(?:storage|disk|space))\b", t):
+        if re.search(r"\b(?:wie\s+viel\s+(?:speicherplatz|festplatte)|freier\s+(?:speicherplatz|platz)|storage\s+left)\b", t):
             try:
                 df    = subprocess.run(["df", "-h", "/"], capture_output=True, text=True).stdout.splitlines()
                 parts = df[1].split()
                 avail, pct = parts[3], parts[4]
-                return f"{avail} of storage available, {pct} used, Sir."
+                return f"{avail} frei, {pct} belegt."
             except Exception:
-                return "I couldn't read the disk stats right now, Sir."
+                return "Ich konnte den Festplattenstatus nicht lesen."
 
         # ── Volume query ──────────────────────────────────────────────────────
-        if re.search(r"\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:current\s+)?volume|current\s+volume)\b", t):
+        if re.search(r"\b(?:wie\s+(?:laut|ist\s+die\s+lautstärke)|aktuelle\s+lautstärke)\b", t):
             vol   = self._applescript("output volume of (get volume settings)")
             muted = self._applescript("output muted of (get volume settings)")
             if muted == "true":
-                return "The volume is currently muted, Sir."
-            return f"The volume is at {vol} percent, Sir."
+                return "Die Lautstärke ist stummgeschaltet."
+            return f"Die Lautstärke ist auf {vol} Prozent."
 
         # ── Active app ────────────────────────────────────────────────────────
-        if re.search(r"\b(?:what\s+am\s+i\s+(?:working\s+on|doing)|current(?:ly\s+(?:using|in|on))?|active\s+(?:app|window)|what(?:'s|\s+is)\s+(?:open|active|running|in\s+front))\b", t):
+        if re.search(r"\b(?:was\s+mache?\s+ich\s+gerade|welche\s+app\s+(?:ist\s+offen|läuft)|was\s+ist\s+(?:offen|aktiv))\b", t):
             app = self._applescript(
                 'tell application "System Events" to get name of first application process whose frontmost is true'
             )
-            return f"You're in {app} right now, Sir."
+            return f"Du bist gerade in {app}."
 
         # ── Maps navigation ───────────────────────────────────────────────────
         m = re.search(
-            r"\b(?:navigate|directions?|route|take me|get me|show me the way)\s+"
-            r"(?:me\s+)?(?:to|towards?)\s+(.+)",
+            r"\b(?:navigier(?:e)?|route|bring\s+mich|zeig\s+mir\s+den\s+weg|navigation)\s+(?:zu|nach)\s+(.+)",
             t,
         )
         if not m:
-            m = re.search(r"\bhow\s+(?:do\s+i\s+get|can\s+i\s+get|to\s+get)\s+to\s+(.+)", t)
+            m = re.search(r"\bwie\s+komme?\s+ich\s+(?:zu|nach)\s+(.+)", t)
         if m:
             raw_dest = re.sub(r"[?.!,]+$", "", m.group(1).strip())
             encoded  = urllib.parse.quote(raw_dest)
             subprocess.run(["open", f"maps://?daddr={encoded}"], check=False)
-            return f"Opening Maps with directions to {raw_dest}, Sir."
+            return f"Öffne Maps mit Route nach {raw_dest}."
 
         # ── Finder folders ────────────────────────────────────────────────────
-        if re.match(r"^open\s+", t):
-            folder_key = re.sub(r"^open\s+", "", t).rstrip("., ").lower()
+        m = re.match(r"^(?:öffne?|zeig(?:e)?\s+mir)\s+(.+?)(?:\s+ordner)?$", t)
+        if m:
+            folder_key = m.group(1).strip().lower()
             if folder_key in self._FINDER_FOLDERS:
                 subprocess.run(["open", self._FINDER_FOLDERS[folder_key]], check=False)
-                return f"Opening your {folder_key.title()} folder, Sir."
+                return f"Öffne deinen {folder_key.title()}-Ordner."
 
         # ── Volume ────────────────────────────────────────────────────────────
-        m = re.search(r"\bvolume\s+(?:to\s+)?(\d{1,3})\b", t)
+        m = re.search(r"\b(?:lautstärke|volume)\s+(?:auf\s+)?(\d{1,3})\b", t)
         if m:
             vol = min(100, max(0, int(m.group(1))))
             self._applescript(f"set volume output volume {vol}")
-            return f"Volume set to {vol} percent, Sir."
+            return f"Lautstärke auf {vol} Prozent."
 
-        if re.search(r"\bunmute\b", t):
+        if re.search(r"\b(?:stumm\s+aus|nicht\s+mehr\s+stumm|unmute)\b", t):
             self._applescript("set volume output muted false")
-            return "Unmuted, Sir."
+            return "Stummschaltung aus."
 
-        if re.search(r"\b(?:mute|silence)\b", t):
+        if re.search(r"\b(?:stumm|leise\s+stellen|mute)\b", t):
             self._applescript("set volume output muted true")
-            return "Muted, Sir."
+            return "Stummgeschaltet."
 
-        if re.search(r"\b(?:turn\s+up|louder|raise\s+(?:the\s+)?volume|increase\s+(?:the\s+)?volume|volume\s+up)\b", t):
+        if re.search(r"\b(?:lauter|mach\s+lauter|erhöh\s+die\s+lautstärke)\b", t):
             cur = self._applescript("output volume of (get volume settings)")
             new_vol = min(100, int(cur or 50) + 15)
             self._applescript(f"set volume output volume {new_vol}")
-            return f"Volume at {new_vol} percent."
+            return f"Lautstärke auf {new_vol} Prozent."
 
-        if re.search(r"\b(?:turn\s+down|quieter|lower\s+(?:the\s+)?volume|decrease\s+(?:the\s+)?volume|volume\s+down)\b", t):
+        if re.search(r"\b(?:leiser|mach\s+leiser|reduzier\s+die\s+lautstärke)\b", t):
             cur = self._applescript("output volume of (get volume settings)")
             new_vol = max(0, int(cur or 50) - 15)
             self._applescript(f"set volume output volume {new_vol}")
-            return f"Volume at {new_vol} percent."
+            return f"Lautstärke auf {new_vol} Prozent."
 
         # ── Screenshot ────────────────────────────────────────────────────────
-        if re.search(r"\b(?:take|capture|make)\s+(?:a\s+)?screenshot\b", t):
+        if re.search(r"\b(?:mach\s+(?:einen\s+)?screenshot|bildschirmfoto|screenshot\s+machen)\b", t):
             ts   = time.strftime("%Y%m%d_%H%M%S")
             path = Path.home() / "Desktop" / f"screenshot_{ts}.png"
             subprocess.run(["screencapture", "-x", str(path)], check=False)
-            return "Screenshot saved to your Desktop, Sir."
+            return "Screenshot auf dem Desktop gespeichert."
 
         # ── Timer ─────────────────────────────────────────────────────────────
         m = re.search(
-            r"\b(?:set\s+(?:a\s+)?)?timer\s+(?:for\s+)?(\d+)\s*(second|minute|hour)s?\b", t
+            r"\b(?:timer|stell(?:e)?\s+(?:einen\s+)?timer)\s+(?:für\s+|auf\s+)?(\d+)\s*(sekunde|minute|stunde)n?\b", t
         )
         if m:
-            amount  = int(m.group(1))
-            unit    = m.group(2)
-            seconds = amount * {"second": 1, "minute": 60, "hour": 3600}[unit]
-            label   = f"{amount} {unit}{'s' if amount != 1 else ''}"
+            amount = int(m.group(1))
+            unit   = m.group(2)
+            seconds = amount * {"sekunde": 1, "minute": 60, "stunde": 3600}[unit]
+            label   = f"{amount} {unit}{'n' if amount != 1 else ''}"
             threading.Thread(
                 target=self._timer_callback, args=(seconds, label), daemon=True
             ).start()
-            return f"Timer set for {label}, Sir."
+            return f"Timer läuft für {label}."
 
         # ── Reminder ──────────────────────────────────────────────────────────
         m = re.search(
-            r"\bremind\s+me\s+in\s+(\d+)\s*(second|minute|hour)s?\b", t
+            r"\berinner(?:e)?\s+mich\s+in\s+(\d+)\s*(sekunde|minute|stunde)n?\b", t
         )
         if m:
             amount  = int(m.group(1))
             unit    = m.group(2)
-            seconds = amount * {"second": 1, "minute": 60, "hour": 3600}[unit]
-            label   = f"{amount} {unit}{'s' if amount != 1 else ''}"
+            seconds = amount * {"sekunde": 1, "minute": 60, "stunde": 3600}[unit]
+            label   = f"{amount} {unit}{'n' if amount != 1 else ''}"
             threading.Thread(
                 target=self._timer_callback, args=(seconds, label), daemon=True
             ).start()
-            return f"I'll remind you in {label}, Sir."
+            return f"Ich erinnere dich in {label}."
 
         # ── Open app ──────────────────────────────────────────────────────────
         m = re.search(
-            r"^(?:open|launch|start)\s+(.+?)(?:\s+(?:app|application))?\s*$", t
+            r"^(?:öffne?|starte?|mach\s+auf)\s+(.+?)(?:\s+(?:app|application))?\s*$", t
         )
         if m and self._is_app_command(m.group(1)):
             app_name = self._resolve_app_name(m.group(1))
             res = subprocess.run(["open", "-a", app_name], capture_output=True)
             if res.returncode == 0:
-                return f"Opening {app_name}, Sir."
-            return f"I couldn't find an app called {app_name}, Sir."
+                return f"Öffne {app_name}."
+            return f"Ich konnte keine App namens {app_name} finden."
 
         # ── Quit app ──────────────────────────────────────────────────────────
         m = re.search(
-            r"^(?:quit|close|exit|kill)\s+(.+?)(?:\s+(?:app|application))?\s*$", t
+            r"^(?:schließe?|beende?|mach\s+zu)\s+(.+?)(?:\s+(?:app|application))?\s*$", t
         )
         if m and self._is_app_command(m.group(1)):
             app_name = self._resolve_app_name(m.group(1))
             self._applescript(f'tell application "{app_name}" to quit')
-            return f"Closing {app_name}."
+            return f"Schließe {app_name}."
 
         # ── Orb demo ──────────────────────────────────────────────────────────
         if re.search(
-            r"\b(?:show\s+me\s+(?:something|some(?:thing)?\s+cool(?:\s+thing)?s?|"
-            r"what\s+you\s+can\s+do|your\s+moves?|off)|"
-            r"do\s+something\s+cool|impress\s+me|show\s+off|"
-            r"activate\s+(?:demo|show|display)|party\s+mode)\b",
+            r"\b(?:zeig\s+mir\s+was|beeindruck\s+mich|mach\s+was\s+cool(?:es)?|party\s+modus)\b",
             t,
         ):
             ws_server.send_event({"action": "demo"})
-            return "Watch this, Sir."
+            return "Pass auf."
 
         return None
 

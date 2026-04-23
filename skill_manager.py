@@ -58,15 +58,22 @@ def save_and_load(name: str, code: str) -> bool:
 
 def try_execute(user_input: str) -> Optional[str]:
     t = user_input.lower()
-    for mod in _loaded.values():
+    for name, mod in _loaded.items():
         triggers = getattr(mod, "TRIGGERS", [])
         if any(tr.lower() in t for tr in triggers):
             try:
                 result = mod.execute(user_input)
-                if result is not None:
-                    return str(result)
             except Exception as e:
-                return f"Der Skill hatte einen Fehler, Sir: {e}"
+                # Log technical error to console, speak a friendly German message
+                print(f"[SKILL] '{name}' Fehler: {e}", flush=True)
+                continue
+            # Empty/None result → skill chose not to handle this input, try next or fall through
+            if result is None:
+                continue
+            text = str(result).strip()
+            if not text:
+                continue
+            return text
     return None
 
 
