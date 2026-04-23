@@ -220,41 +220,38 @@ class VoiceAssistant:
         print("[LLM] Ready  (Metal GPU layers active)")
 
     def _load_tts(self) -> None:
-        from kokoro_onnx import Kokoro
-
+        """Use macOS 'say' command for TTS — native German voices, no downloads."""
         c = self.cfg["tts"]
-        base = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
-
-        # Build ordered list of directories to search for model files.
-        _search_dirs = [
-            _DATA_DIR,                          # ~/Library/Application Support/Jarvis/
-            Path(__file__).parent,              # bundle Resources or project root (local dev)
-        ]
-        _bundle_dir = os.environ.get("JARVIS_BUNDLE_DIR")
-        if _bundle_dir:
-            _search_dirs.append(Path(_bundle_dir))  # folder containing the .app
-
-        def _resolve(key: str, default: str) -> Path:
-            """Search known dirs for the model file; fall back to _DATA_DIR as download target."""
-            name = Path(c.get(key, default)).name
-            for d in _search_dirs:
-                p = d / name
-                if p.is_file():
-                    return p
-            return _DATA_DIR / name   # download destination
-
-        model_p  = _resolve("model_file",  "kokoro-v1.0.onnx")
-        voices_p = _resolve("voices_file", "voices-v1.0.bin")
-        if not model_p.is_file():
-            _download(f"{base}/{model_p.name}", model_p)
-        if not voices_p.is_file():
-            _download(f"{base}/{voices_p.name}", voices_p)
-        print(f"[TTS] Loading Kokoro ONNX  (voice: {c['voice']}) …")
-        self._kokoro = Kokoro(str(model_p), str(voices_p))
-        self._voice: str    = c["voice"]
+        self._voice: str    = c.get("voice", "Markus")
         self._speed: float  = float(c.get("speed", 1.0))
-        self._tts_lang: str = c.get("language", "en-us")
-        print("[TTS] Ready")
+        self._tts_lang: str = c.get("language", "de")
+
+        # Verify 'say' is available (macOS)
+        if subprocess.run(["which", "say"], capture_output=True).returncode != 0:
+            raise RuntimeError("macOS 'say' command not found — requires macOS")
+
+        # Check that the chosen voice exists
+        try:
+            voices_out = subprocess.run(
+                ["say", "-v", "?"], capture_output=True, text=True, timeout=5
+            ).stdout
+            voices_available = [line.split()[0] for line in voices_out.splitlines() if line]
+            if self._voice not in voices_available:
+                german_voices = [v for v in voices_available
+                                 if any(g in voices_out for g in [f"{v}  ", f"{v}\t"])
+                                 and "de_" in voices_out.split(v, 1)[-1][:60]]
+                # Pick first available German voice as fallback
+                german_fallback = next(
+                    (v for v in voices_available
+                     if any(name in v for name in ["Markus", "Anna", "Helena", "Petra", "Yannick"])),
+                    "Markus"
+                )
+                print(f"[TTS] Voice '{self._voice}' nicht verfügbar — nutze '{german_fallback}'")
+                self._voice = german_fallback
+        except Exception:
+            pass
+
+        print(f"[TTS] Ready  (macOS say, voice: {self._voice})")
 
     def _load_stt(self) -> None:
         from faster_whisper import WhisperModel
@@ -353,24 +350,23 @@ class VoiceAssistant:
         )
         return " ".join(s.text.strip() for s in segments).strip()
 
-    # ── TTS ───────────────────────────────────────────────────────────────────
+    # ── TTS (macOS say) ───────────────────────────────────────────────────────
 
-    def _synthesise(self, text: str) -> np.ndarray:
-        samples, _ = self._kokoro.create(
-            text, voice=self._voice, speed=self._speed, lang=self._tts_lang
+    def _say(self, text: str) -> None:
+        """Speak text via macOS 'say' — blocks until finished."""
+        if not text:
+            return
+        rate = int(200 * self._speed)   # words per minute
+        subprocess.run(
+            ["say", "-v", self._voice, "-r", str(rate), text],
+            check=False,
         )
-        return np.asarray(samples, dtype=np.float32)
 
     def speak_direct(self, text: str) -> None:
-        """Speak text immediately via TTS — no LLM involved."""
+        """Speak text immediately — no LLM involved."""
         ws_server.set_state("speaking")
         try:
-            wav    = self._synthesise(text)
-            player = SeamlessPlayer(sample_rate=TTS_RATE)
-            player.start()
-            player.feed(wav)
-            player.mark_done()
-            player.wait()
+            self._say(text)
         finally:
             ws_server.set_state("idle")
 
@@ -873,9 +869,6 @@ class VoiceAssistant:
             # If online AI failed, fall through to local LLM
 
         sentence_q: queue.Queue[Optional[str]] = queue.Queue()
-        player = SeamlessPlayer(sample_rate=TTS_RATE)
-        player.start()
-
         first_audio_ready = threading.Event()
         display_parts: list[str] = []
         display_lock = threading.Lock()
@@ -893,15 +886,13 @@ class VoiceAssistant:
                     break
                 if self._stop_speak.is_set():
                     break
-                wav = self._synthesise(chunk)
-                player.feed(wav)
                 with display_lock:
                     display_parts.append(chunk)
                 if first:
                     ws_server.set_state("speaking")
                     first_audio_ready.set()
                     first = False
-            player.mark_done()
+                self._say(chunk)
 
         llm_t = threading.Thread(target=_llm, daemon=True)
         tts_t = threading.Thread(target=_tts, daemon=True)
@@ -924,7 +915,6 @@ class VoiceAssistant:
         sys.stdout.write(f"Jarvis: {response_text}\n")
         sys.stdout.flush()
 
-        player.wait()
         llm_t.join()
         ws_server.set_state("idle")
 

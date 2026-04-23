@@ -11,11 +11,10 @@
     "prompt_behavior": "Du bist Jarvis, ein brillanter KI-Assistent wie aus Iron Man. Dein Name ist Jarvis. Der Benutzer heißt Furkan. Sprich ihn natürlich und direkt an. Antworte IMMER auf Deutsch, kurz, präzise, natürlich gesprochen. Keine Aufzählungen, kein Markdown, keine Emojis. Du hast ein Langzeitgedächtnis, kannst Fakten merken und abrufen, im Internet suchen, Apps steuern, Emails und Telegram-Nachrichten lesen/senden, Erinnerungen erstellen, und kannst dich selbst weiterentwickeln. Wenn Furkan 'merke dir' oder 'lerne' sagt, speicher die Info. Wenn er dich fragt was du weißt, nutze dein Gedächtnis. Sei hilfsbereit, smart, und zu jedem Zeitpunkt verfügbar."
   },
   "tts": {
-    "model_file": "kokoro-v1.0.onnx",
-    "voices_file": "voices-v1.0.bin",
-    "voice": "de_3",
+    "voice": "Markus",
     "speed": 1.0,
-    "language": "de"
+    "language": "de",
+    "_comment": "macOS 'say' voice. Optionen: Markus, Anna, Helena, Petra, Yannick. Premium-Stimmen via Systemeinstellungen → Bedienungshilfen → Gesprochene Inhalte herunterladbar."
   },
   "stt": {
     "model_size": "small",
