@@ -11,7 +11,7 @@ import { createOrb, type OrbState } from "./orb";
 import "./style.css";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const WS_URL = "ws://localhost:8765";
+const WS_URL = `ws://${window.location.hostname}:8765`;
 const RECONNECT_INTERVAL_MS = 2_000;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ function setConnected(ok: boolean): void {
 
 async function refreshStatus(): Promise<void> {
   try {
-    const res = await fetch("http://localhost:3000/api/status");
+    const res = await fetch(`http://${window.location.hostname}:3000/api/status`);
     if (!res.ok) return;
     const data = (await res.json()) as { state?: string; muted?: boolean };
     if (data.state) {
@@ -85,7 +85,7 @@ async function refreshStatus(): Promise<void> {
 async function toggleMuted(): Promise<void> {
   const nextMuted = muteButtonEl.getAttribute("aria-pressed") !== "true";
   try {
-    const res = await fetch("http://localhost:3000/api/mute", {
+    const res = await fetch(`http://${window.location.hostname}:3000/api/mute`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
