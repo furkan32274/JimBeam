@@ -27,6 +27,7 @@ import sounddevice as sd
 import webrtcvad
 
 import ws_server
+import skill_manager
 
 # ── Data directory ────────────────────────────────────────────────────────────
 # When running inside the macOS app, the Swift wrapper sets JARVIS_DATA_DIR to
@@ -173,6 +174,7 @@ class VoiceAssistant:
             "Keep answers brief and conversational. No bullet points or markdown.",
         )
         self._stop_speak = threading.Event()
+        skill_manager.load_all()
 
     # ── Loading ───────────────────────────────────────────────────────────────
 
@@ -503,6 +505,33 @@ class VoiceAssistant:
         )
         self.speak_direct(msg)
 
+    def _generate_skill_code(self, description: str) -> str:
+        prompt = (
+            f"Generate a Python skill module for Jarvis voice assistant.\n"
+            f"The user wants Jarvis to: {description}\n\n"
+            f"Use EXACTLY this structure:\n"
+            f"SKILL_NAME = \"short name\"\n"
+            f"TRIGGERS = [\"keyword1\", \"keyword2\"]  # German+English keywords\n\n"
+            f"def execute(user_input: str) -> str:\n"
+            f"    import subprocess\n"
+            f"    # Use osascript for macOS apps, subprocess for CLI\n"
+            f"    # Return German response ending with 'Sir.'\n"
+            f"    pass\n\n"
+            f"Rules: only Python code, no markdown, use AppleScript for macOS apps, "
+            f"German responses, import inside execute(), return None if not applicable."
+        )
+        resp = self._llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a Python code generator. Output only valid Python code, no markdown fences, no explanations."},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=600,
+            temperature=0.15,
+            stop=["<|eot_id|>"],
+            stream=False,
+        )
+        return resp["choices"][0]["message"]["content"]
+
     def _handle_system_command(self, text: str) -> Optional[str]:
         """
         Check whether `text` is a local system command.
@@ -510,6 +539,36 @@ class VoiceAssistant:
         If no:  return None  (caller should send to LLM).
         """
         t = text.lower().strip()
+
+        # ── Self-learning: "Jarvis, lern wie du X kannst" ────────────────────
+        if re.search(r"\b(?:lern|learn|kannst du lernen|lerne|bitte lern)\b", t):
+            print(f"[SKILL] Learning request detected: {text}")
+            self.speak_direct("Verstanden, Sir. Ich generiere die neue Fähigkeit. Einen Moment bitte.")
+            try:
+                code = self._generate_skill_code(text)
+                # Derive a short name from the request
+                name_match = re.search(r"\b(?:lern|learn)\w*\s+(?:wie\s+(?:du|ich)\s+)?(.+?)(?:\s+kann(?:st)?|$)", t)
+                skill_name = name_match.group(1).strip() if name_match else text[:30]
+                success = skill_manager.save_and_load(skill_name, code)
+                if success:
+                    return f"Erledigt, Sir. Ich beherrsche jetzt '{skill_name}'. Probieren Sie es aus."
+                else:
+                    return "Ich konnte diese Fähigkeit leider nicht erlernen, Sir. Bitte beschreiben Sie es genauer."
+            except Exception as e:
+                print(f"[SKILL] Learning failed: {e}")
+                return "Beim Erlernen gab es einen Fehler, Sir."
+
+        # ── Skills: check all learned skills first ────────────────────────────
+        skill_resp = skill_manager.try_execute(text)
+        if skill_resp is not None:
+            return skill_resp
+
+        # ── List skills ───────────────────────────────────────────────────────
+        if re.search(r"\b(?:welche fähigkeiten|was kannst du|what can you|liste skills|list skills|deine fähigkeiten)\b", t):
+            skills = skill_manager.list_skills()
+            if skills:
+                return f"Ich beherrsche folgende Fähigkeiten, Sir: {', '.join(skills)}."
+            return "Ich habe noch keine erlernten Fähigkeiten, Sir. Sagen Sie 'Jarvis, lern wie du...' um mir etwas beizubringen."
 
         # ── Date & time ───────────────────────────────────────────────────────
         if re.search(r"\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:current\s+)?time|what\s+time\s+is\s+it)\b", t):
