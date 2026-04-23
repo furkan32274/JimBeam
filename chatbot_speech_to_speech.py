@@ -28,6 +28,7 @@ import webrtcvad
 
 import ws_server
 import skill_manager
+import web_search
 
 # ── Data directory ────────────────────────────────────────────────────────────
 # When running inside the macOS app, the Swift wrapper sets JARVIS_DATA_DIR to
@@ -767,11 +768,23 @@ class VoiceAssistant:
         recent    = self.history[-(max_pairs * 2):]
         return [{"role": "system", "content": self.system_prompt}] + recent
 
-    def stream_sentences(self, user_text: str):
+    def stream_sentences(self, user_text: str, web_context: str = ""):
         self.history.append({"role": "user", "content": user_text})
 
+        messages = self._messages()
+        if web_context:
+            # Inject search results into the last user turn (not saved to history)
+            messages[-1] = {
+                "role": "user",
+                "content": (
+                    f"{user_text}\n\n"
+                    f"[Aktuelle Web-Suchergebnisse zum Thema:\n{web_context}\n"
+                    f"Nutze diese Infos um aktuell und präzise zu antworten.]"
+                ),
+            }
+
         stream = self._llm.create_chat_completion(
-            messages=self._messages(),
+            messages=messages,
             max_tokens=self._llm_cfg.get("max_new_tokens", 256),
             temperature=self._llm_cfg.get("temperature", 0.7),
             top_p=self._llm_cfg.get("top_p", 0.9),
@@ -817,6 +830,15 @@ class VoiceAssistant:
         self._stop_speak.clear()
         ws_server.set_state("thinking")
 
+        # Web search: runs synchronously before LLM so results are ready immediately
+        web_ctx = ""
+        if web_search.needs_search(user_input):
+            print("[Web] Searching…", flush=True)
+            result = web_search.search(user_input)
+            if result:
+                web_ctx = result
+                print(f"[Web] Got {len(result)} chars of results", flush=True)
+
         sentence_q: queue.Queue[Optional[str]] = queue.Queue()
         player = SeamlessPlayer(sample_rate=TTS_RATE)
         player.start()
@@ -826,7 +848,7 @@ class VoiceAssistant:
         display_lock = threading.Lock()
 
         def _llm() -> None:
-            for chunk in self.stream_sentences(user_input):
+            for chunk in self.stream_sentences(user_input, web_context=web_ctx):
                 sentence_q.put(chunk)
             sentence_q.put(None)
 
