@@ -1,0 +1,45 @@
+{
+  "_comment": "Berechtigungen für Jarvis. Setze auf true/false um Zugriff zu erlauben/verbieten.",
+  "apps": {
+    "allow_open":  true,
+    "allow_close": true,
+    "whitelist":   ["Safari", "Chrome", "Google Chrome", "Spotify", "Mail", "Notes", "Calendar", "Reminders", "Notion", "Discord", "WhatsApp", "Telegram", "Xcode", "Terminal", "Visual Studio Code", "Cursor", "Finder", "System Settings"]
+  },
+  "system": {
+    "allow_volume":     true,
+    "allow_brightness": true,
+    "allow_screenshot": true,
+    "allow_shutdown":   false,
+    "allow_restart":    false,
+    "allow_sleep":      true
+  },
+  "files": {
+    "allow_read":   true,
+    "allow_write":  true,
+    "allow_delete": false,
+    "allowed_paths": [
+      "~/Desktop",
+      "~/Documents",
+      "~/Downloads",
+      "~/JimBeam"
+    ]
+  },
+  "network": {
+    "allow_internet":     true,
+    "allow_web_search":   true,
+    "allow_online_ai":    true,
+    "allow_telegram":     true,
+    "allow_email_read":   true,
+    "allow_email_send":   false
+  },
+  "memory": {
+    "allow_learn":   true,
+    "allow_forget":  true,
+    "allow_recall":  true
+  },
+  "self_improvement": {
+    "allow_create_skills": true,
+    "allow_modify_skills": false,
+    "require_confirmation": true
+  }
+}

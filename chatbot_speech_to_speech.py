@@ -29,6 +29,8 @@ import webrtcvad
 import ws_server
 import skill_manager
 import web_search
+import memory
+import online_ai
 
 # ── Data directory ────────────────────────────────────────────────────────────
 # When running inside the macOS app, the Swift wrapper sets JARVIS_DATA_DIR to
@@ -772,7 +774,11 @@ class VoiceAssistant:
     def _messages(self) -> list[dict]:
         max_pairs = self._llm_cfg.get("history_turns", 10)
         recent    = self.history[-(max_pairs * 2):]
-        return [{"role": "system", "content": self.system_prompt}] + recent
+        mem_ctx   = memory.summary_for_system_prompt()
+        sys_prompt = self.system_prompt
+        if mem_ctx:
+            sys_prompt = f"{sys_prompt}\n\n[Langzeitgedächtnis: {mem_ctx}]"
+        return [{"role": "system", "content": sys_prompt}] + recent
 
     def stream_sentences(self, user_text: str, web_context: str = ""):
         self.history.append({"role": "user", "content": user_text})
@@ -844,6 +850,28 @@ class VoiceAssistant:
             if result:
                 web_ctx = result
                 print(f"[Web] Got {len(result)} chars of results", flush=True)
+
+        # Online AI for complex queries — returns complete answer, not streamed
+        if online_ai.should_use_online(user_input):
+            print("[OnlineAI] Using Pollinations AI…", flush=True)
+            mem_ctx = memory.summary_for_system_prompt()
+            answer = online_ai.ask(
+                question=user_input,
+                system_prompt=self.system_prompt,
+                memory_context=mem_ctx,
+                web_context=web_ctx,
+                history=self.history,
+            )
+            if answer:
+                # Save to history
+                self.history.append({"role": "user", "content": user_input})
+                self.history.append({"role": "assistant", "content": answer})
+                # Speak + broadcast
+                ws_server.set_state("speaking")
+                self.speak_direct(answer)
+                print(f"Jarvis: {answer}\n", flush=True)
+                return
+            # If online AI failed, fall through to local LLM
 
         sentence_q: queue.Queue[Optional[str]] = queue.Queue()
         player = SeamlessPlayer(sample_rate=TTS_RATE)
