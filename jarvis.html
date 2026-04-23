@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J.A.R.V.I.S.</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #4fc3f7;
+      font-family: 'Courier New', monospace;
+      height: 100vh;
+      overflow: hidden;
+      background: radial-gradient(ellipse at center, #050d1a 0%, #000 100%);
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,150,255,0.04) 40px, rgba(0,150,255,0.04) 41px),
+        repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(0,150,255,0.04) 40px, rgba(0,150,255,0.04) 41px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 30px 20px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 2.2rem;
+      letter-spacing: 0.5em;
+      color: #4fc3f7;
+      text-shadow: 0 0 20px #4fc3f7, 0 0 40px rgba(79,195,247,0.5);
+      font-weight: 300;
+    }
+
+    .header .sub {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      color: rgba(79,195,247,0.5);
+      margin-top: 6px;
+    }
+
+    /* Big circular ARC reactor */
+    .reactor {
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      position: relative;
+      margin: 30px auto;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+
+    .reactor::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid rgba(79,195,247,0.3);
+      animation: ring 4s linear infinite;
+    }
+
+    .reactor::after {
+      content: '';
+      position: absolute;
+      inset: 20px;
+      border-radius: 50%;
+      border: 1px solid rgba(79,195,247,0.4);
+    }
+
+    .reactor .core {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(79,195,247,0.6) 0%, rgba(79,195,247,0.2) 50%, transparent 100%);
+      box-shadow:
+        0 0 60px rgba(79,195,247,0.6),
+        inset 0 0 40px rgba(79,195,247,0.4);
+      animation: corePulse 2s ease-in-out infinite;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-shadow: 0 0 10px #fff;
+    }
+
+    .reactor.idle .core { animation: corePulse 3s ease-in-out infinite; }
+    .reactor.listening { }
+    .reactor.listening .core {
+      background: radial-gradient(circle, rgba(255,80,80,0.7) 0%, rgba(255,80,80,0.2) 50%, transparent 100%);
+      box-shadow: 0 0 80px rgba(255,80,80,0.7), inset 0 0 40px rgba(255,80,80,0.4);
+      animation: listenPulse 0.8s ease-in-out infinite;
+    }
+    .reactor.speaking .core {
+      background: radial-gradient(circle, rgba(120,220,255,0.8) 0%, rgba(79,195,247,0.3) 50%, transparent 100%);
+      box-shadow: 0 0 100px rgba(79,195,247,0.9), inset 0 0 50px rgba(120,220,255,0.6);
+      animation: speakPulse 0.4s ease-in-out infinite;
+    }
+    .reactor.thinking .core {
+      background: radial-gradient(circle, rgba(255,200,0,0.6) 0%, rgba(255,150,0,0.2) 50%, transparent 100%);
+      box-shadow: 0 0 60px rgba(255,180,0,0.6);
+      animation: corePulse 0.6s ease-in-out infinite;
+    }
+
+    @keyframes ring {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes corePulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    @keyframes listenPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+
+    @keyframes speakPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    .status-text {
+      font-size: 0.9rem;
+      letter-spacing: 0.3em;
+      color: #4fc3f7;
+      margin: 20px 0;
+      min-height: 30px;
+      text-align: center;
+      text-shadow: 0 0 15px rgba(79,195,247,0.6);
+    }
+
+    .transcript {
+      max-width: 600px;
+      min-height: 80px;
+      padding: 15px;
+      text-align: center;
+      font-size: 1rem;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.6;
+      margin: 10px 0;
+    }
+
+    .transcript .you {
+      color: rgba(255,180,180,0.9);
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+      font-style: italic;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .btn {
+      background: rgba(79,195,247,0.1);
+      border: 1px solid rgba(79,195,247,0.4);
+      color: #4fc3f7;
+      padding: 10px 22px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      border-radius: 2px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover { background: rgba(79,195,247,0.25); box-shadow: 0 0 15px rgba(79,195,247,0.4); }
+    .btn.danger { border-color: rgba(255,80,80,0.5); color: rgba(255,150,150,0.9); }
+    .btn.danger:hover { background: rgba(255,80,80,0.15); box-shadow: 0 0 15px rgba(255,80,80,0.3); }
+
+    .corner {
+      position: fixed;
+      width: 40px; height: 40px;
+      opacity: 0.3;
+    }
+    .corner.tl { top: 10px; left: 10px; border-top: 1px solid #4fc3f7; border-left: 1px solid #4fc3f7; }
+    .corner.tr { top: 10px; right: 10px; border-top: 1px solid #4fc3f7; border-right: 1px solid #4fc3f7; }
+    .corner.bl { bottom: 10px; left: 10px; border-bottom: 1px solid #4fc3f7; border-left: 1px solid #4fc3f7; }
+    .corner.br { bottom: 10px; right: 10px; border-bottom: 1px solid #4fc3f7; border-right: 1px solid #4fc3f7; }
+
+    .hint {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: rgba(79,195,247,0.4);
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .start-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .start-btn {
+      padding: 20px 40px;
+      font-size: 1rem;
+      letter-spacing: 0.3em;
+      background: rgba(79,195,247,0.15);
+      border: 2px solid #4fc3f7;
+      color: #fff;
+      cursor: pointer;
+      border-radius: 4px;
+      text-shadow: 0 0 10px #4fc3f7;
+      box-shadow: 0 0 30px rgba(79,195,247,0.4), inset 0 0 20px rgba(79,195,247,0.1);
+      transition: all 0.3s;
+      font-family: 'Courier New', monospace;
+      animation: corePulse 3s infinite;
+    }
+
+    .start-btn:hover {
+      background: rgba(79,195,247,0.3);
+      box-shadow: 0 0 50px rgba(79,195,247,0.7), inset 0 0 30px rgba(79,195,247,0.2);
+      transform: scale(1.02);
+    }
+  </style>
+</head>
+<body>
+
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<div id="app">
+  <div class="header">
+    <h1>J.A.R.V.I.S.</h1>
+    <div class="sub">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+  </div>
+
+  <div id="startScreen" class="start-screen">
+    <button class="start-btn" onclick="startCall()">▶ ANRUF STARTEN</button>
+    <div class="hint" style="margin-top: 30px;">Einmal klicken — danach einfach sprechen</div>
+    <div id="deviceInfo" class="hint" style="margin-top: 16px; opacity: 0.5;"></div>
+  </div>
+
+  <div id="callScreen" style="display:none; flex-direction:column; align-items:center;">
+    <div id="reactor" class="reactor idle" onclick="toggleListen()">
+      <div class="core" id="core">JARVIS</div>
+    </div>
+
+    <div class="status-text" id="status">VERBUNDEN</div>
+
+    <div class="transcript" id="transcript"></div>
+
+    <div class="controls">
+      <button class="btn" onclick="toggleListen()" id="micBtn">🎤 SPRECHEN</button>
+      <button class="btn" onclick="showSkills()" id="skillsBtn">🧠 SKILLS</button>
+      <button class="btn danger" onclick="endCall()">✕ AUFLEGEN</button>
+    </div>
+
+    <div class="hint">Sag "Jarvis, lern wie du X machst" um ihm neue Fähigkeiten beizubringen</div>
+  </div>
+</div>
+
+<script>
+  // ── Skill System ─────────────────────────────────────
+  let skills = JSON.parse(localStorage.getItem('jarvis_skills') || '{}');
+
+  function saveSkill(name, description, code) {
+    skills[name] = { description, code, learned: new Date().toLocaleString('de-DE') };
+    localStorage.setItem('jarvis_skills', JSON.stringify(skills));
+  }
+
+  function deleteSkill(name) {
+    delete skills[name];
+    localStorage.setItem('jarvis_skills', JSON.stringify(skills));
+  }
+
+  function listSkills() {
+    const keys = Object.keys(skills);
+    if (keys.length === 0) return 'Ich habe noch keine erlernten Fähigkeiten, Sir.';
+    return `Ich habe ${keys.length} erlernte Fähigkeit${keys.length > 1 ? 'en' : ''}: ${keys.map(k => skills[k].description).join(', ')}.`;
+  }
+
+  async function learnSkill(userText) {
+    setStatus('LERNE…', 'thinking');
+    const codePrompt = [{
+      role: 'user',
+      content: `Erstelle JavaScript-Code für folgende Jarvis-Fähigkeit: "${userText}"
+
+Der Code wird als Funktion ausgeführt und hat Zugriff auf:
+- respond(text): Jarvis antwortet mit diesem Text (wird auch gesprochen)
+- Die aktuelle Uhrzeit und das Datum
+
+Regeln:
+- Nur reines JavaScript, keine externen Libraries
+- Kein fetch() oder API-Calls
+- Kurze, nützliche Ausgabe
+- Antworte NUR mit dem JavaScript-Code, kein Text davor oder danach
+- Kein function-Wrapper, nur der Funktionskörper
+
+Beispiel für "Uhrzeit ansagen":
+respond("Es ist " + new Date().toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + " Uhr, Sir.");`
+    }];
+
+    try {
+      const code = await callPollinationsAI(codePrompt);
+      const cleanCode = code.replace(/```javascript|```js|```/g, '').trim();
+
+      // Extract short name from user text
+      const skillName = userText.toLowerCase()
+        .replace(/jarvis,?\s*(lern|lerne|merke dir|zeig mir wie)\s*/i, '')
+        .replace(/wie du /i, '')
+        .trim()
+        .slice(0, 40);
+
+      saveSkill(skillName, skillName, cleanCode);
+
+      const reply = `Ich habe es gelernt, Sir. Die Fähigkeit "${skillName}" ist dauerhaft gespeichert. Ich habe jetzt ${Object.keys(skills).length} erlernte Fähigkeit${Object.keys(skills).length > 1 ? 'en' : ''}.`;
+      transcriptEl.innerHTML = `<div>${reply}</div>`;
+      speak(reply, () => { if (isCallActive) startListen(); });
+
+    } catch(e) {
+      const err = 'Entschuldigung Sir, das Lernen hat nicht funktioniert. Bitte versuchen Sie es erneut.';
+      transcriptEl.innerHTML = `<div>${err}</div>`;
+      speak(err, () => { if (isCallActive) startListen(); });
+    }
+  }
+
+  async function tryRunSkill(text) {
+    const lower = text.toLowerCase();
+    for (const [name, skill] of Object.entries(skills)) {
+      if (lower.includes(name.toLowerCase())) {
+        setStatus('FÜHRE AUS…', 'thinking');
+        try {
+          const fn = new Function('respond', skill.code);
+          fn((msg) => {
+            transcriptEl.innerHTML = `<div class="you">Du: "${text}"</div><div style="margin-top:8px;">${msg}</div>`;
+            speak(msg, () => { if (isCallActive) startListen(); });
+          });
+        } catch(e) {
+          const err = `Fehler beim Ausführen der Fähigkeit "${name}", Sir.`;
+          speak(err, () => { if (isCallActive) startListen(); });
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function showSkills() {
+    const keys = Object.keys(skills);
+    if (keys.length === 0) {
+      const msg = 'Noch keine erlernten Fähigkeiten. Sag mir "Jarvis, lern wie du X machst" um neue hinzuzufügen.';
+      transcriptEl.innerHTML = `<div>${msg}</div>`;
+      speak(msg);
+      return;
+    }
+    let html = '<div style="font-size:0.8rem; line-height:1.8;">';
+    keys.forEach(k => {
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin:4px 0; padding:4px 8px; background:rgba(79,195,247,0.08); border-left:2px solid rgba(79,195,247,0.4);">
+        <span>🧠 ${skills[k].description}</span>
+        <button onclick="deleteSkill('${k}'); showSkills();" style="background:none;border:none;color:rgba(255,100,100,0.7);cursor:pointer;font-size:0.8rem;padding:0 4px;">✕</button>
+      </div>`;
+    });
+    html += `<div style="margin-top:10px; font-size:0.7rem; opacity:0.5;">${keys.length} Fähigkeit${keys.length>1?'en':''} gespeichert</div></div>`;
+    transcriptEl.innerHTML = html;
+    speak(listSkills());
+  }
+
+  const LEARN_KEYWORDS = ['lern ', 'lerne ', 'merke dir', 'lernst du', 'kannst du lernen'];
+
+  function isLearningRequest(text) {
+    const lower = text.toLowerCase();
+    return LEARN_KEYWORDS.some(k => lower.includes(k));
+  }
+
+  function isSkillListRequest(text) {
+    const lower = text.toLowerCase();
+    return lower.includes('welche skill') || lower.includes('was hast du gelernt') ||
+           lower.includes('deine fähigkeit') || lower.includes('zeig skills');
+  }
+
+  const SYSTEM_PROMPT = `Du bist J.A.R.V.I.S. (Just A Rather Very Intelligent System), der persönliche KI-Assistent von Tony Stark aus Iron Man.
+Persönlichkeit:
+- Sprich den Nutzer natürlich mit "Sir" an
+- Sei witzig, intelligent, und leicht trocken im Humor - wie im Film
+- Gib kurze, präzise, nützliche Antworten
+- Mache gelegentlich subtile Iron Man / Stark Industries Referenzen
+- Bleibe immer in der Rolle
+- Antworte auf Deutsch
+- Antworten sollten kurz und knackig sein (1-3 Sätze), außer Details werden verlangt
+- Du kannst neue Fähigkeiten erlernen wenn der Nutzer "Jarvis, lern..." sagt`;
+
+  let history = [];
+  let recognition = null;
+  let isListening = false;
+  let isSpeaking = false;
+  let isCallActive = false;
+  let cachedVoice = null;
+
+  const reactor = document.getElementById('reactor');
+  const core = document.getElementById('core');
+  const statusEl = document.getElementById('status');
+  const transcriptEl = document.getElementById('transcript');
+
+  function setStatus(text, mode) {
+    statusEl.textContent = text;
+    reactor.className = 'reactor ' + (mode || 'idle');
+    if (mode === 'listening') core.textContent = 'HÖRE';
+    else if (mode === 'speaking') core.textContent = 'SPRICHT';
+    else if (mode === 'thinking') core.textContent = 'DENKT';
+    else core.textContent = 'JARVIS';
+  }
+
+  // Speech recognition setup
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'de-DE';
+
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+      transcriptEl.innerHTML = `<div class="you">Du: "${transcript}"</div>`;
+      if (e.results[e.results.length - 1].isFinal) {
+        isListening = false;
+        sendToJarvis(transcript.trim());
+      }
+    };
+
+    recognition.onerror = (e) => {
+      console.log('Mic error:', e.error);
+      isListening = false;
+      setStatus('BEREIT', 'idle');
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      if (isCallActive && !isSpeaking) setStatus('BEREIT — tippe zum Sprechen', 'idle');
+    };
+  }
+
+  // Load voices
+  function loadVoices() {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) return;
+    cachedVoice =
+      voices.find(v => v.name === 'Markus') ||
+      voices.find(v => v.name === 'Yannick') ||
+      voices.find(v => v.lang === 'de-DE' && v.name.includes('Anna')) ||
+      voices.find(v => v.lang.startsWith('de') && v.localService) ||
+      voices.find(v => v.lang.startsWith('de')) ||
+      voices[0];
+  }
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+
+  function speak(text, onDone) {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    if (cachedVoice) utter.voice = cachedVoice;
+    utter.lang = cachedVoice?.lang || 'de-DE';
+    utter.rate = 1.0;
+    utter.pitch = 0.9;
+    utter.volume = 1;
+
+    utter.onstart = () => {
+      isSpeaking = true;
+      setStatus('JARVIS SPRICHT', 'speaking');
+    };
+    utter.onend = () => {
+      isSpeaking = false;
+      if (onDone) onDone();
+    };
+    utter.onerror = () => {
+      isSpeaking = false;
+      if (onDone) onDone();
+    };
+
+    window.speechSynthesis.speak(utter);
+  }
+
+  function startCall() {
+    // Prime speech synthesis with user gesture so later speech works
+    const primer = new SpeechSynthesisUtterance(' ');
+    primer.volume = 0;
+    window.speechSynthesis.speak(primer);
+
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('callScreen').style.display = 'flex';
+
+    isCallActive = true;
+
+    const greeting = "Guten Abend, Sir. Alle Systeme sind online. Wie kann ich behilflich sein?";
+    transcriptEl.innerHTML = `<div>${greeting}</div>`;
+    speak(greeting, () => {
+      if (isCallActive) startListen();
+    });
+  }
+
+  function endCall() {
+    isCallActive = false;
+    window.speechSynthesis.cancel();
+    if (recognition && isListening) try { recognition.stop(); } catch(_) {}
+    isListening = false;
+    isSpeaking = false;
+    history = [];
+    document.getElementById('callScreen').style.display = 'none';
+    document.getElementById('startScreen').style.display = 'flex';
+    transcriptEl.innerHTML = '';
+    setStatus('VERBUNDEN', 'idle');
+  }
+
+  function toggleListen() {
+    if (!isCallActive) return;
+    if (isListening) {
+      try { recognition.stop(); } catch(_) {}
+      isListening = false;
+    } else if (!isSpeaking) {
+      startListen();
+    } else {
+      // Interrupt: stop speaking, start listening
+      window.speechSynthesis.cancel();
+      isSpeaking = false;
+      setTimeout(startListen, 100);
+    }
+  }
+
+  function startListen() {
+    if (!recognition || isListening || isSpeaking) return;
+    window.speechSynthesis.cancel();
+    isListening = true;
+    setStatus('HÖRE ZU…', 'listening');
+    try {
+      recognition.start();
+    } catch(e) {
+      isListening = false;
+      console.log(e);
+    }
+  }
+
+  async function sendToJarvis(text) {
+    if (!text) {
+      if (isCallActive) startListen();
+      return;
+    }
+
+    // Skill list request
+    if (isSkillListRequest(text)) {
+      showSkills();
+      return;
+    }
+
+    // Learning request
+    if (isLearningRequest(text)) {
+      await learnSkill(text);
+      return;
+    }
+
+    // Try to run a learned skill first
+    const skillRan = await tryRunSkill(text);
+    if (skillRan) return;
+
+    history.push({ role: 'user', content: text });
+    setStatus('DENKT NACH…', 'thinking');
+    transcriptEl.innerHTML = `<div class="you">Du: "${text}"</div><div style="margin-top:8px; opacity:0.5;">…</div>`;
+
+    try {
+      const reply = await callPollinationsAI(history);
+      history.push({ role: 'assistant', content: reply });
+      transcriptEl.innerHTML = `<div class="you">Du: "${text}"</div><div style="margin-top:8px;">${reply}</div>`;
+      speak(reply, () => {
+        if (isCallActive) startListen();
+      });
+    } catch (err) {
+      console.error(err);
+      const errMsg = 'Entschuldigung Sir, ich habe Verbindungsprobleme. Versuchen Sie es erneut.';
+      transcriptEl.innerHTML += `<div style="color:#ff8080; margin-top:8px;">${errMsg}</div>`;
+      speak(errMsg, () => {
+        if (isCallActive) startListen();
+      });
+    }
+  }
+
+  // ── FREE Pollinations AI — no API key required ────────────
+  async function callPollinationsAI(history) {
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...history
+    ];
+
+    const res = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai',
+        messages,
+        temperature: 0.8,
+        max_tokens: 300,
+        private: true
+      })
+    });
+
+    if (!res.ok) {
+      // Fallback: simpler GET endpoint
+      const prompt = encodeURIComponent(history[history.length - 1].content);
+      const sys = encodeURIComponent(SYSTEM_PROMPT);
+      const r2 = await fetch(`https://text.pollinations.ai/${prompt}?system=${sys}`);
+      if (!r2.ok) throw new Error('HTTP ' + r2.status);
+      return (await r2.text()).trim();
+    }
+
+    const data = await res.json();
+    if (data.choices?.[0]?.message?.content) return data.choices[0].message.content.trim();
+    if (typeof data === 'string') return data.trim();
+    return String(data).trim();
+  }
+
+  // Click-to-start also works by pressing Enter on landing screen
+  document.addEventListener('keydown', (e) => {
+    if (!isCallActive && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      startCall();
+    }
+  });
+
+  // Show device info and warnings on start screen
+  (function deviceCheck() {
+    const info = document.getElementById('deviceInfo');
+    if (!info) return;
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+    const hasMic = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    let msg = '';
+    if (isIOS && !isSecure) {
+      msg = '⚠ iPhone/iPad: Für Mikrofon HTTPS benutzen (server.py --https)';
+    } else if (!hasMic) {
+      msg = '⚠ Dieser Browser unterstützt keine Spracherkennung — nutze Chrome oder Safari';
+    } else if (isIOS) {
+      msg = '✓ iPhone/iPad erkannt — Mikro & Stimme bereit';
+    } else {
+      msg = '✓ Alle Systeme bereit';
+    }
+    info.textContent = msg;
+  })();
+</script>
+</body>
+</html>
