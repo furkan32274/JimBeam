@@ -1,76 +1,80 @@
 #!/bin/bash
-# Baut Jarvis.app vollautomatisch und legt sie auf den Desktop
+# Baut Jarvis.app vollautomatisch — funktioniert ohne Xcode, nur mit Command Line Tools
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT="$DIR/JarvisApp/JarvisApp.xcodeproj"
-BUILD_DIR="/tmp/JarvisBuild"
-DEST="$HOME/Desktop/Jarvis.app"
+SWIFT_SRC="$DIR/JarvisApp/jarvis_main.swift"
+APP="$HOME/Desktop/Jarvis.app"
+MACOS_DIR="$APP/Contents/MacOS"
+RES_DIR="$APP/Contents/Resources"
+TMP_BIN="/tmp/JarvisExe"
 
-echo "▶  Jarvis App wird gebaut..."
-
-# Xcode Command Line Tools prüfen
-if ! command -v xcodebuild &>/dev/null; then
-    echo "▶  Installiere Xcode Command Line Tools..."
-    xcode-select --install
-    echo ""
-    echo "⚠️  Bitte warte bis die Installation fertig ist, dann starte dieses Script nochmal."
-    exit 1
-fi
-
-# Code updaten
 echo "▶  Code aktualisieren..."
 cd "$DIR"
 git pull origin claude/setup-reezxy-repo-gFugx 2>/dev/null || true
 
-# Alten Build löschen
-rm -rf "$BUILD_DIR"
-
-# App bauen (ohne Apple-Konto, ad-hoc signiert)
-echo "▶  Kompiliere Jarvis.app (dauert ~30 Sekunden)..."
-xcodebuild \
-    -project "$PROJECT" \
-    -scheme Jarvis \
-    -configuration Release \
-    -derivedDataPath "$BUILD_DIR" \
-    CODE_SIGN_IDENTITY="-" \
-    CODE_SIGNING_REQUIRED=NO \
-    CODE_SIGNING_ALLOWED=NO \
-    DEVELOPMENT_TEAM="" \
-    build 2>&1 | grep -E "(error:|warning:|Build succeeded|Build FAILED|▶|✅|❌)" || true
-
-# Gebaute App finden
-BUILT_APP=$(find "$BUILD_DIR" -name "Jarvis.app" -maxdepth 6 | head -1)
-
-if [ -z "$BUILT_APP" ]; then
-    echo "❌  Build fehlgeschlagen. Vollständige Ausgabe:"
-    xcodebuild \
-        -project "$PROJECT" \
-        -scheme Jarvis \
-        -configuration Release \
-        -derivedDataPath "$BUILD_DIR" \
-        CODE_SIGN_IDENTITY="-" \
-        CODE_SIGNING_REQUIRED=NO \
-        CODE_SIGNING_ALLOWED=NO \
-        DEVELOPMENT_TEAM="" \
-        build 2>&1 | tail -30
-    exit 1
+# Xcode-App vorhanden? → Pfad setzen
+if [ -d "/Applications/Xcode.app" ]; then
+    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer 2>/dev/null || true
 fi
 
-echo "▶  App auf Desktop kopieren..."
-rm -rf "$DEST"
-cp -r "$BUILT_APP" "$DEST"
+echo "▶  Swift kompilieren..."
+swiftc "$SWIFT_SRC" \
+    -framework Cocoa \
+    -framework WebKit \
+    -O \
+    -o "$TMP_BIN"
 
-# Ad-hoc signieren (verhindert "beschädigt"-Fehler)
-echo "▶  App signieren..."
-codesign --force --deep --sign - "$DEST" 2>/dev/null || true
-xattr -cr "$DEST" 2>/dev/null || true
+echo "▶  App-Bundle erstellen..."
+rm -rf "$APP"
+mkdir -p "$MACOS_DIR" "$RES_DIR"
+
+cp "$TMP_BIN" "$MACOS_DIR/Jarvis"
+
+# Info.plist
+cat > "$APP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Jarvis</string>
+    <key>CFBundleDisplayName</key><string>Jarvis</string>
+    <key>CFBundleIdentifier</key><string>com.furkan.jarvis</string>
+    <key>CFBundleExecutable</key><string>Jarvis</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleVersion</key><string>1.0</string>
+    <key>CFBundleShortVersionString</key><string>1.0</string>
+    <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSMicrophoneUsageDescription</key><string>Jarvis braucht das Mikrofon für Sprachbefehle.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+</dict>
+</plist>
+PLIST
+
+# Icon kopieren falls vorhanden
+ICON_SRC="$DIR/JarvisApp/JarvisApp/Assets.xcassets/AppIcon.appiconset/icon_256.png"
+if [ -f "$ICON_SRC" ]; then
+    ICONSET="/tmp/Jarvis.iconset"
+    rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+    for s in 16 32 128 256 512; do
+        sips -z $s $s "$ICON_SRC" --out "$ICONSET/icon_${s}x${s}.png" 2>/dev/null
+        d=$((s*2))
+        sips -z $d $d "$ICON_SRC" --out "$ICONSET/icon_${s}x${s}@2x.png" 2>/dev/null
+    done
+    iconutil -c icns "$ICONSET" -o "$RES_DIR/AppIcon.icns" 2>/dev/null && \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null || true
+    rm -rf "$ICONSET"
+fi
+
+echo "▶  Signieren..."
+codesign --force --deep --sign - "$APP" 2>/dev/null || true
+xattr -cr "$APP" 2>/dev/null || true
 
 echo ""
-echo "✅  Fertig! Jarvis.app ist auf deinem Desktop."
-echo ""
-echo "Doppelklick auf Jarvis.app → Orb öffnet sich direkt im Fenster!"
+echo "✅  Fertig! Jarvis.app liegt auf dem Desktop."
+echo "    Doppelklick → Jarvis startet + Orb öffnet sich!"
 echo ""
 
-# Direkt starten
-open "$DEST"
+open "$APP"
