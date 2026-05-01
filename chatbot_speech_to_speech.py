@@ -31,6 +31,7 @@ import skill_manager
 import web_search
 import memory
 import online_ai
+import claude_ai
 
 # ── Data directory ────────────────────────────────────────────────────────────
 # When running inside the macOS app, the Swift wrapper sets JARVIS_DATA_DIR to
@@ -164,6 +165,10 @@ class VoiceAssistant:
         self._load_llm()
         self._load_tts()
         self._load_stt()
+        if claude_ai.is_available():
+            print("[AI] Claude API aktiv — Jarvis nutzt Claude als primäres Gehirn")
+        else:
+            print("[AI] Kein ANTHROPIC_API_KEY — nutze lokales LLM (Claude via ~/.jarvis_secrets.json aktivierbar)")
 
         self.vad = webrtcvad.Vad(3)
         self._audio_q: queue.Queue[bytes] = queue.Queue()
@@ -357,10 +362,13 @@ class VoiceAssistant:
         if not text:
             return
         rate = int(200 * self._speed)   # words per minute
-        subprocess.run(
+        result = subprocess.run(
             ["say", "-v", self._voice, "-r", str(rate), text],
-            check=False,
+            check=False, capture_output=True,
         )
+        if result.returncode != 0:
+            # Voice not installed — fall back to system default voice
+            subprocess.run(["say", "-r", str(rate), text], check=False)
 
     def speak_direct(self, text: str) -> None:
         """Speak text immediately — no LLM involved."""
@@ -776,19 +784,65 @@ class VoiceAssistant:
         return [{"role": "system", "content": sys_prompt}] + recent
 
     def stream_sentences(self, user_text: str, web_context: str = ""):
-        self.history.append({"role": "user", "content": user_text})
+        """Stream sentences from Claude (primary) or local LLM (fallback)."""
+        prompt = user_text
+        if web_context:
+            prompt = (
+                f"{user_text}\n\n"
+                f"[Aktuelle Web-Suchergebnisse:\n{web_context}\n"
+                f"Nutze diese Infos um aktuell und präzise zu antworten.]"
+            )
 
+        buf  = ""
+        full = ""
+
+        def _yield_buf(b: str):
+            """Flush buffer by sentence/clause boundaries."""
+            nonlocal buf
+            parts = SENTENCE_RE.split(b)
+            if len(parts) > 1:
+                for sentence in parts[:-1]:
+                    c = _clean(sentence)
+                    if c:
+                        yield c
+                buf = parts[-1]
+                return
+            if len(b.split()) >= MIN_CLAUSE_WORDS:
+                clauses = CLAUSE_RE.split(b)
+                if len(clauses) > 1:
+                    for clause in clauses[:-1]:
+                        c = _clean(clause)
+                        if c:
+                            yield c
+                    buf = clauses[-1]
+
+        # ── Claude API (smart, fast) ──────────────────────────────────────────
+        if claude_ai.is_available():
+            mem_ctx = memory.summary_for_system_prompt()
+            self.history.append({"role": "user", "content": user_text})
+            for delta in claude_ai.stream_response(
+                user_text=prompt,
+                system_prompt=self.system_prompt,
+                memory_context=mem_ctx,
+                history=self.history[:-1],   # exclude the turn we just appended
+                max_tokens=self._llm_cfg.get("max_new_tokens", 512),
+            ):
+                buf  += delta
+                full += delta
+                yield from _yield_buf(buf)
+            if buf.strip():
+                c = _clean(buf)
+                if c:
+                    yield c
+                    full = full  # already accumulated
+            self.history.append({"role": "assistant", "content": _clean(full)})
+            return
+
+        # ── Local LLM fallback ────────────────────────────────────────────────
+        self.history.append({"role": "user", "content": user_text})
         messages = self._messages()
         if web_context:
-            # Inject search results into the last user turn (not saved to history)
-            messages[-1] = {
-                "role": "user",
-                "content": (
-                    f"{user_text}\n\n"
-                    f"[Aktuelle Web-Suchergebnisse zum Thema:\n{web_context}\n"
-                    f"Nutze diese Infos um aktuell und präzise zu antworten.]"
-                ),
-            }
+            messages[-1] = {"role": "user", "content": prompt}
 
         stream = self._llm.create_chat_completion(
             messages=messages,
@@ -799,31 +853,11 @@ class VoiceAssistant:
             stream=True,
         )
 
-        buf  = ""
-        full = ""
-
         for chunk in stream:
             delta: str = chunk["choices"][0]["delta"].get("content", "") or ""
             buf  += delta
             full += delta
-
-            parts = SENTENCE_RE.split(buf)
-            if len(parts) > 1:
-                for sentence in parts[:-1]:
-                    c = _clean(sentence)
-                    if c:
-                        yield c
-                buf = parts[-1]
-                continue
-
-            if len(buf.split()) >= MIN_CLAUSE_WORDS:
-                clauses = CLAUSE_RE.split(buf)
-                if len(clauses) > 1:
-                    for clause in clauses[:-1]:
-                        c = _clean(clause)
-                        if c:
-                            yield c
-                    buf = clauses[-1]
+            yield from _yield_buf(buf)
 
         if buf.strip():
             c = _clean(buf)
@@ -832,8 +866,8 @@ class VoiceAssistant:
 
         self.history.append({"role": "assistant", "content": _clean(full)})
 
-    def handle_turn(self, user_input: str) -> None:
-        """Three-thread pipeline: LLM → TTS → SeamlessPlayer (zero-gap audio)."""
+    def handle_turn(self, user_input: str, voice_mode: bool = True) -> None:
+        """LLM pipeline: stream sentences → TTS speak each chunk."""
         self._stop_speak.clear()
         ws_server.set_state("thinking")
 
@@ -846,8 +880,8 @@ class VoiceAssistant:
                 web_ctx = result
                 print(f"[Web] Got {len(result)} chars of results", flush=True)
 
-        # Online AI for complex queries — returns complete answer, not streamed
-        if online_ai.should_use_online(user_input):
+        # Online AI only for text chat (too slow for voice — causes 15s+ thinking delay)
+        if not voice_mode and online_ai.should_use_online(user_input):
             print("[OnlineAI] Using Pollinations AI…", flush=True)
             mem_ctx = memory.summary_for_system_prompt()
             answer = online_ai.ask(
@@ -858,15 +892,12 @@ class VoiceAssistant:
                 history=self.history,
             )
             if answer:
-                # Save to history
                 self.history.append({"role": "user", "content": user_input})
                 self.history.append({"role": "assistant", "content": answer})
-                # Speak + broadcast
                 ws_server.set_state("speaking")
                 self.speak_direct(answer)
                 print(f"Jarvis: {answer}\n", flush=True)
                 return
-            # If online AI failed, fall through to local LLM
 
         sentence_q: queue.Queue[Optional[str]] = queue.Queue()
         first_audio_ready = threading.Event()
@@ -905,7 +936,7 @@ class VoiceAssistant:
         llm_t.start()
         tts_t.start()
 
-        first_audio_ready.wait(timeout=60)
+        first_audio_ready.wait(timeout=15)
         stop_spin.set()
         spin_t.join()
 
