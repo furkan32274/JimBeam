@@ -1,5 +1,4 @@
 llama-cpp-python
-kokoro-onnx
 faster-whisper
 sounddevice
 webrtcvad-wheels

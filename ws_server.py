@@ -21,10 +21,9 @@ import logging
 import os
 import threading
 from pathlib import Path
-from typing import Set
+from typing import Any, Set
 
 import websockets
-from websockets.server import WebSocketServerProtocol
 
 PORT      = 8765
 HTTP_PORT = 3000
@@ -39,7 +38,7 @@ _DIST_DIR = (
     else Path(__file__).parent / "frontend" / "dist"
 )
 
-_clients: Set[WebSocketServerProtocol] = set()
+_clients: Set[Any] = set()
 _loop: asyncio.AbstractEventLoop | None = None
 _current_state: str = "idle"
 _muted: bool = False
@@ -53,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 # ── Internal async helpers ────────────────────────────────────────────────────
 
-async def _handler(ws: WebSocketServerProtocol) -> None:
+async def _handler(ws: Any) -> None:
     _clients.add(ws)
     try:
         # Send current state immediately so the UI is in sync on connect
@@ -74,8 +73,16 @@ async def _broadcast(state: str, muted: bool) -> None:
     )
 
 
+def _ws_serve():
+    """Return the right serve function for both websockets <14 and >=14."""
+    try:
+        return websockets.asyncio.server.serve
+    except AttributeError:
+        return websockets.serve
+
+
 async def _serve() -> None:
-    async with websockets.serve(_handler, "0.0.0.0", PORT):
+    async with _ws_serve()(_handler, "0.0.0.0", PORT):
         await asyncio.Future()  # run forever
 
 
